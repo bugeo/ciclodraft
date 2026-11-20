@@ -1,0 +1,151 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:CicloDraft.Controls"
+        xmlns:local="using:CicloDraft"
+        x:Class="CicloDraft.PhotoView"
+        Background="{StaticResource WindowBackground}"
+        Focusable="True"
+        >
+  <DockPanel>
+
+    <Border DockPanel.Dock="Top" Classes="toolbar" Padding="12,8">
+      <StackPanel Spacing="8">
+        <!-- prima riga: chiudi e nome del file -->
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button x:Name="CloseViewBtn" Classes="mapbtn" ToolTip.Tip="Chiude il fotoinserimento e torna alla mappa (resta salvato)">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="✕" VerticalAlignment="Center" />
+              <TextBlock Text="Chiudi" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <PathIcon Data="{StaticResource IconEye}" Width="16" Height="16" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+          <TextBlock x:Name="TitleText" Text="Fotoinserimento" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <!-- seconda riga: tutti i comandi -->
+        <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+          <Button x:Name="OpenPhotoBtn">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconFolderOpen}" Width="14" Height="14" />
+              <TextBlock Text="Apri foto…" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
+          <ToggleButton x:Name="ModePoints" Content="1 · Punti" IsChecked="True" />
+          <ToggleButton x:Name="ModeVerify" Content="2 · Verifica" />
+          <ToggleButton x:Name="ModeInsert" Content="3 · Fotoinserimento" />
+          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
+          <Button x:Name="PreviewBtn" Content="▶ Anteprima" Classes="primary" />
+          <Button x:Name="CompareBtn" Content="◐ Originale" ToolTip.Tip="Tieni premuto per vedere la foto originale" />
+          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
+          <Button x:Name="RemoveCarsBtn" Content="Rimuovi auto" ToolTip.Tip="Trova le auto che si sovrappongono ai tracciati disegnati, le cancella e ricostruisce la foto. Le altre auto restano e passano davanti al progetto." />
+          <CheckBox x:Name="CleanCheck" Content="Senza auto" IsEnabled="False" VerticalAlignment="Center" />
+          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
+          <ToggleButton x:Name="BrushPaint" Content="Maschera: dipingi" />
+          <ToggleButton x:Name="BrushErase" Content="Gomma" />
+          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
+          <Button x:Name="ExportBtn" Content="Esporta immagine…" Classes="primary" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Classes="statusbar" Padding="12,6">
+      <TextBlock x:Name="StatusText" TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource TextPrimary}"
+                 Text="Apri una foto della via. Poi clicca un punto riconoscibile sulla foto e lo stesso punto sulla mappa." />
+    </Border>
+
+    <Border DockPanel.Dock="Right" Width="400" Classes="panel" BorderThickness="1,0,0,0">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Height="330" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,0,0,1">
+          <DockPanel>
+            <Border DockPanel.Dock="Top" Background="{StaticResource CardBackground}" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,0,0,1" Padding="8,5">
+              <DockPanel>
+                <CheckBox x:Name="ShowProjectCheck" DockPanel.Dock="Right" Content="Progetto" IsChecked="True" FontSize="12" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Button x:Name="RotLeftBtn" Content="⟲ 15°" FontSize="11.5" Padding="6,3" />
+                  <Button x:Name="RotRightBtn" Content="⟳ 15°" FontSize="11.5" Padding="6,3" />
+                  <Button x:Name="RotNorthBtn" Content="Nord in alto" FontSize="11.5" Padding="6,3" />
+                  <Button x:Name="RotCamBtn" Content="Come la foto" FontSize="11.5" Padding="6,3" />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+            <c:PickMapCanvas x:Name="PickMap" />
+          </DockPanel>
+        </Border>
+        <ScrollViewer>
+          <StackPanel>
+            <Border Classes="section">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="step" Text="PUNTI DI CONTROLLO" />
+                <TextBlock Classes="note" Text="Clic su un punto della foto, poi sullo stesso punto della mappa. Servono almeno 4 punti ben distribuiti, vicini e lontani, a destra e a sinistra; meglio 6–8. Spigoli degli edifici a terra, angoli dei marciapiedi; con Maiusc+clic sulla mappa si sceglie una linea (cordolo, striscia, facciata) e sulla foto basta un suo punto qualsiasi." />
+                <ListBox x:Name="PairsList" MaxHeight="190" Background="Transparent">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:PairRow">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <Border Width="20" Height="20" CornerRadius="10" Background="#D81B60">
+                          <TextBlock Text="{Binding N}" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding Err}" FontSize="11.5" Foreground="{Binding ErrBrush}" FontFeatures="+tnum" VerticalAlignment="Center" />
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel x:Name="PairEditor" Spacing="6" IsVisible="False">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Classes="k" TextWrapping="Wrap" Text="Quota del punto sul piano stradale (m): 0 a terra, altezza della gronda per uno spigolo alto" VerticalAlignment="Center" />
+                    <NumericUpDown x:Name="PairZBox" Grid.Column="1" Width="110" Minimum="-5" Maximum="300" Increment="0.5" FormatString="0.00" FontSize="12" />
+                  </Grid>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="UseHeightBtn" Content="Quota = altezza edificio" FontSize="12" />
+                    <Button x:Name="DeletePairBtn" Content="Elimina punto" FontSize="12" Foreground="{StaticResource ErrorBrush}" />
+                  </StackPanel>
+                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Classes="k" Text="La foto è stata scattata" VerticalAlignment="Center" />
+                  <ComboBox x:Name="HeightHintCombo" Grid.Column="1" Width="170" SelectedIndex="0" FontSize="12">
+                    <ComboBoxItem>a piedi (1,7 m)</ComboBoxItem>
+                    <ComboBoxItem>da Street View (2,5 m)</ComboBoxItem>
+                    <ComboBoxItem>da una finestra (6 m)</ComboBoxItem>
+                  </ComboBox>
+                </Grid>
+                <Border Background="{StaticResource CardBackground}" CornerRadius="6" Padding="10,8">
+                  <TextBlock x:Name="CameraText" Classes="note" Foreground="{StaticResource TextPrimary}" Text="Fotocamera non ancora calcolata." />
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="section">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="step" Text="RESA DEL PROGETTO" />
+                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+                  <TextBlock Classes="k" Text="Luminosità" VerticalAlignment="Center" />
+                  <Slider x:Name="ExposureSlider" Grid.Column="1" Minimum="0.5" Maximum="1.6" Value="1.0" />
+                  <TextBlock x:Name="ExposureText" Grid.Column="2" Classes="k" Width="36" VerticalAlignment="Center" />
+                  <TextBlock Grid.Row="1" Classes="k" Text="Ombre della foto" VerticalAlignment="Center" />
+                  <Slider x:Name="ShadowSlider" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1" Value="0.75" />
+                  <TextBlock x:Name="ShadowText" Grid.Row="1" Grid.Column="2" Classes="k" Width="36" VerticalAlignment="Center" />
+                  <TextBlock Grid.Row="2" Classes="k" Text="Opacità" VerticalAlignment="Center" />
+                  <Slider x:Name="OpacitySlider" Grid.Row="2" Grid.Column="1" Minimum="0.3" Maximum="1" Value="1" />
+                  <TextBlock x:Name="OpacityText" Grid.Row="2" Grid.Column="2" Classes="k" Width="36" VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <CheckBox x:Name="MarkingsCheck" Content="Segnaletica" IsChecked="True" FontSize="12" />
+                  <CheckBox x:Name="BikeSymCheck" Content="Simboli bici" IsChecked="True" FontSize="12" />
+                  <CheckBox x:Name="LightsCheck" Content="Lampioni" FontSize="12" />
+                </StackPanel>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                  <TextBlock Classes="k" Text="Pennello (px)" VerticalAlignment="Center" />
+                  <Slider x:Name="BrushSlider" Grid.Column="1" Minimum="3" Maximum="150" Value="25" />
+                  <Button x:Name="ClearMaskBtn" Grid.Column="2" Content="Svuota maschera" FontSize="12" />
+                </Grid>
+                <TextBlock Classes="note" Text="La maschera indica ciò che sta davanti al progetto (auto, persone, pali, alberi): dipingila sulla foto e il progetto passerà dietro. Rotella: zoom · tasto destro: sposta · Ctrl+rotella: dimensione del pennello." />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <c:PhotoCanvas x:Name="Photo" />
+  </DockPanel>
+</UserControl>

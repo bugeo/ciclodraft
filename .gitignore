@@ -1,0 +1,20 @@
+# compilazione
+bin/
+obj/
+pub/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+
+# modelli per la rimozione delle auto (circa 350 MB): vanno scaricati a parte nella cartella "modelli"
+modelli/
+
+# file pesanti generati
+*.glb
+*.zip
+
+# sistema
+.DS_Store
+Thumbs.db

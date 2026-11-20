@@ -1,0 +1,135 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:CicloDraft.Controls"
+        xmlns:io="using:CicloDraft.IO"
+        x:Class="CicloDraft.ClipWindow"
+        Title="CicloDraft · Ritaglia dati"
+        Width="1380" Height="860" MinWidth="1040" MinHeight="620"
+        >
+  <DockPanel>
+
+    <Border DockPanel.Dock="Top" Classes="toolbar" Padding="12,8">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,0,18,0">
+          <Border Width="22" Height="22" CornerRadius="11" Background="#D6603F">
+            <TextBlock Text="C" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="Ritaglia dati" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button x:Name="AddFilesBtn" Content="Aggiungi file (.gpkg, .shp)…" />
+          <Button x:Name="ZoomAllBtn" Content="Adatta vista" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Classes="statusbar" Padding="12,6">
+      <DockPanel>
+        <TextBlock x:Name="CoordText" DockPanel.Dock="Right" FontFeatures="+tnum" Foreground="{StaticResource TextSecondary}" FontSize="12" />
+        <TextBlock x:Name="StatusText" TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource TextPrimary}"
+                   Text="Aggiungi uno o più file, scegli i livelli da tenere e disegna l'area di interesse." />
+      </DockPanel>
+    </Border>
+
+    <!-- Livelli -->
+    <Border DockPanel.Dock="Left" Width="420" Classes="panel" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Classes="section">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="step" Text="1 · LIVELLI DA TENERE" />
+            <TextBlock x:Name="FilesText" Classes="note" Text="Nessun file." />
+            <TextBox x:Name="FilterBox" Watermark="Cerca un livello (es. EDIFC, AC_PED)…" FontSize="12" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button x:Name="SuggestBtn" Content="Livelli consigliati" FontSize="12" />
+              <Button x:Name="NoneBtn" Content="Nessuno" FontSize="12" />
+              <CheckBox x:Name="OnlyIncludedCheck" Content="Solo quelli tenuti" FontSize="12" />
+            </StackPanel>
+            <Grid ColumnDefinitions="54,54,*" Margin="2,2,0,0">
+              <TextBlock Classes="k" Text="Tieni" FontSize="11" />
+              <TextBlock Grid.Column="1" Classes="k" Text="Mostra" FontSize="11" />
+              <TextBlock Grid.Column="2" Classes="k" Text="Livello" FontSize="11" />
+            </Grid>
+          </StackPanel>
+        </Border>
+        <ListBox x:Name="LayersList" Background="Transparent" Padding="6,0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="io:SourceLayer">
+              <Grid ColumnDefinitions="48,48,12,*" ColumnSpacing="4">
+                <CheckBox IsChecked="{Binding Include, Mode=TwoWay}" VerticalAlignment="Center" />
+                <CheckBox Grid.Column="1" IsChecked="{Binding Show, Mode=TwoWay}" VerticalAlignment="Center" />
+                <Border Grid.Column="2" Width="10" Height="10" CornerRadius="2" VerticalAlignment="Center" Background="{Binding Swatch}" />
+                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,0,0">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding Info}" FontSize="11" Foreground="{StaticResource TextTertiary}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding InArea}" FontSize="11" Foreground="{StaticResource AccentBrush}" IsVisible="{Binding InArea, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- Area e salvataggio -->
+    <Border DockPanel.Dock="Right" Width="330" Classes="panel" BorderThickness="1,0,0,0">
+      <ScrollViewer>
+        <StackPanel>
+          <Border Classes="section">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="step" Text="2 · AREA DI INTERESSE" />
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <ToggleButton x:Name="ToolPan" Content="Sposta" FontSize="12" IsChecked="True" />
+                <ToggleButton x:Name="ToolRect" Content="Rettangolo" FontSize="12" />
+                <ToggleButton x:Name="ToolPoly" Content="Poligono" FontSize="12" />
+              </StackPanel>
+              <TextBlock x:Name="ToolHint" Classes="note" Text="Trascina per spostare la mappa, rotella per lo zoom." />
+              <Button x:Name="UseExtentBtn" Classes="wide" Content="Usa l'estensione del livello selezionato" FontSize="12" />
+              <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="6" RowSpacing="6">
+                <TextBlock Classes="k" Text="E min" VerticalAlignment="Center" />
+                <TextBox x:Name="XMinBox" Grid.Column="1" FontSize="12" FontFeatures="+tnum" />
+                <TextBlock Grid.Column="2" Classes="k" Text="E max" VerticalAlignment="Center" />
+                <TextBox x:Name="XMaxBox" Grid.Column="3" FontSize="12" FontFeatures="+tnum" />
+                <TextBlock Grid.Row="1" Classes="k" Text="N min" VerticalAlignment="Center" />
+                <TextBox x:Name="YMinBox" Grid.Row="1" Grid.Column="1" FontSize="12" FontFeatures="+tnum" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Classes="k" Text="N max" VerticalAlignment="Center" />
+                <TextBox x:Name="YMaxBox" Grid.Row="1" Grid.Column="3" FontSize="12" FontFeatures="+tnum" />
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button x:Name="ApplyCoordsBtn" Content="Applica coordinate" FontSize="12" />
+                <Button x:Name="ClearAreaBtn" Content="Cancella area" FontSize="12" />
+              </StackPanel>
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBlock Classes="k" Text="Margine attorno all'area (m)" VerticalAlignment="Center" />
+                <NumericUpDown x:Name="MarginBox" Grid.Column="1" Width="120" Value="20" Minimum="0" Maximum="2000" Increment="5" FormatString="0" FontSize="12" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="section">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="step" Text="3 · SALVA" />
+              <RadioButton x:Name="CutKeepBuildingsRadio" GroupName="cut" IsChecked="True" FontSize="12">
+                <TextBlock TextWrapping="Wrap" FontSize="12" Text="Taglia sul bordo dell'area, ma tieni interi gli edifici (consigliato)" />
+              </RadioButton>
+              <RadioButton x:Name="CutRadio" GroupName="cut" FontSize="12">
+                <TextBlock TextWrapping="Wrap" FontSize="12" Text="Taglia tutto sul bordo dell'area" />
+              </RadioButton>
+              <RadioButton x:Name="KeepWholeRadio" GroupName="cut" FontSize="12">
+                <TextBlock TextWrapping="Wrap" FontSize="12" Text="Tieni interi tutti gli elementi che toccano l'area" />
+              </RadioButton>
+              <TextBlock x:Name="CrsText" Classes="note" />
+              <Border Background="{StaticResource CardBackground}" CornerRadius="6" Padding="10,8">
+                <TextBlock x:Name="SummaryText" Classes="note" Foreground="{StaticResource TextPrimary}" Text="Disegna l'area per vedere quanti elementi verranno salvati." />
+              </Border>
+              <Button x:Name="SaveOpenBtn" Classes="wide accent" Content="Salva e apri in CicloDraft…" />
+              <Button x:Name="SaveBtn" Classes="wide" Content="Salva solo il GeoPackage…" />
+              <Button x:Name="CancelBtn" Classes="wide" Content="Annulla salvataggio" IsVisible="False" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <c:ClipCanvas x:Name="Map" />
+  </DockPanel>
+</Window>

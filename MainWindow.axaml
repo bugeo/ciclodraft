@@ -1,0 +1,488 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:CicloDraft.Controls"
+        xmlns:io="using:CicloDraft.IO"
+        xmlns:local="using:CicloDraft"
+        x:Class="CicloDraft.MainWindow"
+        Title="CicloDraft"
+        Width="1440" Height="880" MinWidth="1080" MinHeight="660"
+        WindowStartupLocation="CenterScreen">
+  <DockPanel>
+
+    <!-- Barra dei menu -->
+    <Border DockPanel.Dock="Top" Classes="toolbar" Padding="10,2">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,10,0">
+          <Border Width="22" Height="22" CornerRadius="11" Background="#D6603F">
+            <TextBlock Text="C" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="CicloDraft" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" />
+        </StackPanel>
+        <Menu x:Name="MainMenu" VerticalAlignment="Center">
+          <MenuItem Header="_File">
+            <MenuItem x:Name="OpenProjMenu" Header="Apri progetto…" InputGesture="Ctrl+O" />
+            <MenuItem x:Name="OpenGpkgMenu" Header="Apri GeoPackage…" />
+            <MenuItem x:Name="ClipMenu" Header="Ritaglia dati…" />
+            <Separator />
+            <MenuItem x:Name="SaveProjMenu" Header="Salva" InputGesture="Ctrl+S" />
+          </MenuItem>
+          <MenuItem Header="_Esporta">
+            <MenuItem x:Name="ExportDxfMenu" Header="DXF…" />
+            <MenuItem x:Name="Export3DMenu" Header="3D…" />
+            <MenuItem x:Name="ExportCsvMenu" Header="CSV…" />
+          </MenuItem>
+          <MenuItem Header="_Visualizza">
+            <MenuItem x:Name="MapLabelsMenu" Header="Etichette con i nomi degli elementi" ToggleType="CheckBox" IsChecked="True" />
+            <MenuItem x:Name="PhotoIconsMenu" Header="Icone dei fotoinserimenti" ToggleType="CheckBox" IsChecked="True" />
+            <Separator />
+            <MenuItem x:Name="DxfContextOnMenu" Header="DXF con contesto" ToggleType="Radio" GroupName="dxfctx" IsChecked="True" />
+            <MenuItem x:Name="DxfContextOffMenu" Header="DXF senza contesto" ToggleType="Radio" GroupName="dxfctx" />
+            <Separator />
+            <MenuItem x:Name="DxfLabelsOnMenu" Header="DXF con etichette" ToggleType="Radio" GroupName="dxflab" IsChecked="True" />
+            <MenuItem x:Name="DxfLabelsOffMenu" Header="DXF senza etichette" ToggleType="Radio" GroupName="dxflab" />
+          </MenuItem>
+        </Menu>
+      </DockPanel>
+    </Border>
+
+    <!-- Barra di stato -->
+    <Border DockPanel.Dock="Bottom" Classes="statusbar" Padding="12,6">
+      <DockPanel>
+        <TextBlock x:Name="CoordText" DockPanel.Dock="Right" FontFeatures="+tnum" Foreground="{StaticResource TextSecondary}" FontSize="12" />
+        <TextBlock x:Name="StatusText" Text="Apri un progetto o un GeoPackage per iniziare." TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource TextPrimary}" />
+      </DockPanel>
+    </Border>
+
+    <!-- ═══════════ Pannello sinistro: la guida, un riquadro per passo ═══════════ -->
+    <Border DockPanel.Dock="Left" Width="350" Classes="panel" BorderThickness="0,0,1,0">
+      <ScrollViewer x:Name="LeftScroll">
+        <StackPanel Margin="16,14,16,16">
+
+          <!-- 2. Livelli: da confermare prima di disegnare -->
+          <Border x:Name="LayersCard" Classes="card" IsVisible="False">
+            <StackPanel Spacing="8">
+              <DockPanel>
+                <Button x:Name="EditLayersBtn" DockPanel.Dock="Right" Classes="link" Content="Modifica" IsVisible="False" VerticalAlignment="Center" />
+                <TextBlock Classes="sectionTitle" Text="Livelli" />
+              </DockPanel>
+              <TextBlock x:Name="FileText" Classes="note" Foreground="{StaticResource TextPrimary}" />
+              <TextBlock x:Name="CrsText" Classes="note" />
+              <TextBlock x:Name="LayersSummary" Classes="note" IsVisible="False" />
+              <StackPanel x:Name="LayersBody" Spacing="8">
+                <TextBlock Classes="note" Text="Per ogni livello scegli il ruolo e se vederlo sulla mappa. Il programma propone i ruoli dai nomi: controllali e conferma." />
+                <ItemsControl x:Name="LayersList">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="io:GpkgLayer">
+                      <Border Classes="inset" Margin="0,0,0,6">
+                        <StackPanel Spacing="6">
+                          <StackPanel>
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" Foreground="{StaticResource TextPrimary}" />
+                            <TextBlock Text="{Binding Info}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextTertiary}" />
+                          </StackPanel>
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <ComboBox HorizontalAlignment="Stretch" FontSize="12" SelectedIndex="{Binding Role, Mode=TwoWay}">
+                              <ComboBoxItem>Nascosto</ComboBoxItem>
+                              <ComboBoxItem>Muri abitazioni</ComboBoxItem>
+                              <ComboBoxItem>Marciapiedi</ComboBoxItem>
+                              <ComboBoxItem>Sfondo</ComboBoxItem>
+                              <ComboBoxItem>Edifici 3D</ComboBoxItem>
+                            </ComboBox>
+                            <CheckBox Grid.Column="1" Content="Visibile" FontSize="12" IsChecked="{Binding Visible, Mode=TwoWay}" />
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button x:Name="ConfirmLayersBtn" Classes="wide primary" Content="Conferma i livelli" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="ElementsCard" Classes="card" IsVisible="False">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="sectionTitle" Text="Elementi" />
+              <TextBlock x:Name="NoElemText" Classes="note" Text="Nessun elemento. Premi «Aggiungi elemento» in alto sulla mappa." />
+              <ListBox x:Name="ElementsList" MaxHeight="320">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="local:ElementRow">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                      <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Swatch}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="{Binding Area}" FontSize="11.5" Foreground="{StaticResource TextSecondary}" FontFeatures="+tnum" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="PhotosCard" Classes="card" IsVisible="False">
+            <StackPanel Spacing="6">
+              <DockPanel>
+                <Button x:Name="NewPhotoBtn" DockPanel.Dock="Right" Padding="10,4" VerticalAlignment="Center" ToolTip.Tip="Nuovo fotoinserimento: scegli la foto">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock Text="+" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="Nuovo" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <TextBlock Classes="sectionTitle" Text="Fotoinserimenti" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBlock x:Name="NoPhotoText" Classes="note" Text="Nessun fotoinserimento. Premi «Nuovo» e scegli una foto della via." />
+              <StackPanel x:Name="PhotoList" Spacing="2" />
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="TotalsCard" Classes="card" IsVisible="False">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="sectionTitle" Text="Totali per tipo" />
+              <ItemsControl x:Name="TotalsList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="local:TotalRow">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2">
+                      <Border Width="10" Height="10" CornerRadius="2" Background="{Binding Swatch}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" TextWrapping="Wrap" />
+                      <TextBlock Grid.Column="2" Text="{Binding Value}" FontSize="12" FontFeatures="+tnum" Foreground="{StaticResource TextPrimary}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="ViewHelp" Padding="2,4">
+            <StackPanel Spacing="4">
+              <TextBlock Classes="step" Text="COMANDI VISTA" />
+              <TextBlock Classes="note" Text="Rotella: zoom · trascina con il tasto destro o centrale: sposta · clic su un elemento: seleziona · Esc: annulla" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+
+    <Panel>
+      <c:MapCanvas x:Name="Map" />
+      <!-- in alto a sinistra: adatta la vista a tutto il disegno -->
+      <StackPanel x:Name="ViewBtns" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,14,0,0" IsVisible="False">
+        <Button x:Name="ZoomBtn" Content="⤢  Adatta vista" Classes="mapbtn" />
+        <Button x:Name="RotPlusBtn" Content="⟲ +5°" Classes="mapbtn" ToolTip.Tip="Ruota il disegno di 5° in senso antiorario" />
+        <Button x:Name="RotMinusBtn" Content="⟳ −5°" Classes="mapbtn" ToolTip.Tip="Ruota il disegno di 5° in senso orario" />
+        <Button x:Name="RotResetBtn" Classes="mapbtn" IsVisible="False" ToolTip.Tip="Torna con il nord in alto" />
+      </StackPanel>
+      <!-- in alto al centro: apre il riquadro «Aggiungi elemento» -->
+      <Button x:Name="MapAddBtn" Classes="primary" Content="＋  Aggiungi elemento" IsVisible="False"
+              HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0" Padding="16,9" FontSize="13.5" />
+      <!-- all'avvio, al centro: da dove partire -->
+      <Border x:Name="StartCard" Classes="card active" Background="#FF262B33" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460" Padding="26,22" BoxShadow="0 8 30 0 #40000000">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="sectionTitle" FontSize="18" Text="Inizia" HorizontalAlignment="Center" />
+          <TextBlock Classes="note" TextAlignment="Center" Text="Apri un progetto salvato (.ciclo) oppure un GeoPackage con edifici e marciapiedi." />
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,4,0,0">
+            <Button x:Name="OpenProjBtn" Classes="wide primary" Content="Apri progetto…" Padding="12,11" FontSize="13.5" />
+            <Button x:Name="OpenGpkgBtn" Grid.Column="1" Classes="wide primary" Content="Apri GeoPackage…" Padding="12,11" FontSize="13.5" />
+          </Grid>
+          <Button x:Name="ClipLinkBtn" Classes="link" HorizontalAlignment="Center">
+            <TextBlock TextWrapping="Wrap" TextAlignment="Center" Text="File molto grande (es. DBGT comunale)? Ritaglia prima l'area e i livelli che servono…" />
+          </Button>
+        </StackPanel>
+      </Border>
+      <!-- ═══ riquadri di destra: galleggiano sopra la mappa (la mappa resta a tutta larghezza) ═══ -->
+      <Border x:Name="RightPanel" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="360" Margin="0,12,12,12">
+        <ScrollViewer Background="{x:Null}" VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="0" VerticalAlignment="Top">
+            <!-- quando non c'è niente da aggiungere o modificare -->
+            <Border x:Name="RightHintCard" Classes="card">
+              <StackPanel Spacing="6">
+                <TextBlock Classes="sectionTitle" Text="Elemento" />
+                <TextBlock x:Name="RightHintText" Classes="note" Text="Apri un progetto o un GeoPackage per iniziare." />
+              </StackPanel>
+            </Border>
+
+            <!-- modifica della linea: punti chiave da spostare, eliminare, aggiungere -->
+            <Border x:Name="EditLineCard" Classes="card active" IsVisible="False">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sectionTitle" Text="Modifica linea" />
+                <TextBlock x:Name="EditLineInfo" Classes="note" />
+                <TextBlock Classes="note" Text="Trascina un punto per spostarlo · clic su un punto e Canc (o «Elimina punto») per toglierlo · doppio clic sulla linea per inserirne uno nuovo. I punti verdi sono agganciati a un altro elemento e lo seguono." />
+                <TextBlock Classes="k" Text="Aggiungi punti" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                  <Button x:Name="ExtendStartBtn" Classes="wide">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconArrowLeft}" Width="13" Height="13" />
+                      <TextBlock Text="Prosegui dall'inizio" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button x:Name="ExtendEndBtn" Grid.Column="1" Classes="wide">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Prosegui dalla fine" VerticalAlignment="Center" />
+                      <PathIcon Data="{StaticResource IconArrowRight}" Width="13" Height="13" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+                <CheckBox x:Name="EditSnapCheck" IsChecked="True" FontSize="12" Content="Aggancia a vertici, muri ed elementi" />
+                <CheckBox x:Name="EditFollowCheck" IsChecked="True" FontSize="12">
+                  <TextBlock TextWrapping="Wrap" FontSize="12" Text="Segui il contorno tra due punti dello stesso edificio o elemento" />
+                </CheckBox>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Button x:Name="DeleteKeyBtn" Classes="danger">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
+                      <TextBlock Text="Elimina punto" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button x:Name="FinishEditBtn" Classes="accent">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconFloppy}" Width="13" Height="13" />
+                      <TextBlock Text="Salva" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- 3. Aggiungi elemento: si sceglie l'elemento e se ne disegna sulla mappa il bordo o l'interasse -->
+            <Border x:Name="AddCard" Classes="card" IsVisible="False">
+              <StackPanel Spacing="8">
+                <DockPanel>
+                  <Button x:Name="CloseAddBtn" DockPanel.Dock="Right" Classes="transparent" Content="✕" Padding="8,2" VerticalAlignment="Center" ToolTip.Tip="Chiudi" />
+                  <TextBlock Classes="sectionTitle" Text="Aggiungi elemento" VerticalAlignment="Center" />
+                </DockPanel>
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                  <TextBlock Classes="k" Text="Elemento" VerticalAlignment="Center" />
+                  <ComboBox x:Name="TypeCombo" Grid.Column="1" HorizontalAlignment="Stretch" PlaceholderText="Scegli l'elemento…" />
+                </Grid>
+                <!-- il resto compare solo dopo aver scelto l'elemento -->
+                <StackPanel x:Name="AddBody" Spacing="8" IsVisible="False">
+                  <TextBlock Classes="k" Text="Modalità" Margin="0,2,0,0" />
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <RadioButton x:Name="KindTrackRadio" GroupName="kind" IsChecked="True" FontSize="12.5" Content="Tracciato" />
+                    <RadioButton x:Name="KindPolyRadio" Grid.Column="1" GroupName="kind" FontSize="12.5" Content="Poligono" />
+                  </Grid>
+                  <TextBlock x:Name="KindNote" Classes="note" Text="L'elemento si sviluppa lungo una linea che disegni sulla mappa." />
+                  <StackPanel x:Name="TrackOptions" Spacing="6">
+                    <TextBlock Classes="k" Text="Cosa disegni sulla mappa" />
+                    <RadioButton x:Name="RefBorderRadio" GroupName="ref" IsChecked="True" FontSize="12">
+                      <TextBlock TextWrapping="Wrap" FontSize="12" Text="Bordo: l'elemento sta da un lato della linea (es. marciapiede lungo i muri)" />
+                    </RadioButton>
+                    <RadioButton x:Name="RefAxisRadio" GroupName="ref" FontSize="12">
+                      <TextBlock TextWrapping="Wrap" FontSize="12" Text="Interasse: l'elemento sta metà per parte (es. carreggiata, corsia doppia)" />
+                    </RadioButton>
+                    <RadioButton x:Name="ModeFillRadio" GroupName="ref" FontSize="12">
+                      <TextBlock TextWrapping="Wrap" FontSize="12" Text="Riempimento: occupa lo spazio tra due elementi già disegnati" />
+                    </RadioButton>
+                  </StackPanel>
+                  <Button x:Name="NewElemBtn" Classes="wide accent" Content="Disegna sulla mappa" />
+
+                  <StackPanel x:Name="DrawPanel" Spacing="6" IsVisible="False">
+                    <TextBlock x:Name="TraceNote" Classes="note" Text="Clic per aggiungere un punto (si aggancia a muri, marciapiedi esistenti ed elementi già disegnati), doppio clic o Invio per finire, Backspace per togliere l'ultimo, Esc per annullare." />
+                    <CheckBox x:Name="SnapCheck" IsChecked="True" FontSize="12" Content="Aggancia a vertici, muri ed elementi" />
+                    <CheckBox x:Name="FollowCheck" IsChecked="True" FontSize="12">
+                      <TextBlock TextWrapping="Wrap" FontSize="12" Text="Segui il contorno tra due punti dello stesso edificio o elemento" />
+                    </CheckBox>
+                    <Button x:Name="MatchHostBtn" Classes="wide accent" IsVisible="False" />
+                    <StackPanel x:Name="TracePanel" Orientation="Horizontal" Spacing="6">
+                      <Button x:Name="TraceUndoBtn" Content="Togli ultimo" />
+                      <Button x:Name="TraceFinishBtn" Content="Termina" Classes="accent" />
+                      <Button x:Name="TraceCancelBtn" Content="Annulla" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <StackPanel x:Name="RangePanel" Spacing="6" IsVisible="False">
+                    <TextBlock x:Name="RangeInfo" Classes="note" />
+                    <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="6">
+                      <TextBlock Classes="k" Text="Da" VerticalAlignment="Center" />
+                      <NumericUpDown x:Name="RangeFrom" Grid.Column="1" Increment="1" FormatString="0.00" Minimum="0" FontSize="12" />
+                      <TextBlock Grid.Column="2" Classes="k" Text="A" VerticalAlignment="Center" />
+                      <NumericUpDown x:Name="RangeTo" Grid.Column="3" Increment="1" FormatString="0.00" Minimum="0" FontSize="12" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Button x:Name="WholeEdgeBtn" Content="Tutto" />
+                      <Button x:Name="ConfirmRangeBtn" Content="Conferma tratto" Classes="accent" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <StackPanel x:Name="WidthPanel" Spacing="6" IsVisible="False">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBlock Classes="k" Text="Larghezza (m)" VerticalAlignment="Center" />
+                      <NumericUpDown x:Name="DraftWidthBox" Grid.Column="1" Width="130" Increment="0.1" FormatString="0.00" Minimum="0.05" Maximum="100" FontSize="12" />
+                    </Grid>
+                    <Button x:Name="FlipDraftBtn" Content="Inverti lato" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                      <TextBlock Classes="k" TextWrapping="Wrap" Text="Ignora rientranze e sporgenze della linea fino a (m)" VerticalAlignment="Center" />
+                      <NumericUpDown x:Name="DraftSmoothBox" Grid.Column="1" Width="130" Increment="0.1" FormatString="0.00" Minimum="0" Maximum="10" FontSize="12" />
+                    </Grid>
+                  </StackPanel>
+
+                  <TextBlock x:Name="OtherInfo" Classes="note" IsVisible="False" />
+
+                  <StackPanel x:Name="CommitPanel" Orientation="Horizontal" Spacing="6" IsVisible="False">
+                    <Button x:Name="CommitBtn" Content="Disegna" Classes="accent" />
+                    <Button x:Name="EditDraftLineBtn">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconPencil}" Width="13" Height="13" />
+                      <TextBlock Text="Modifica la linea" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                    <Button x:Name="CancelDraftBtn" Content="Annulla" />
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+
+            <Border x:Name="SelPanel" Classes="card" IsVisible="False">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sectionTitle" Text="Elemento selezionato" />
+                <TextBox x:Name="NameBox" FontSize="13" FontWeight="SemiBold" />
+                <Border Classes="tabs">
+                  <Grid ColumnDefinitions="*,*,*" ColumnSpacing="3">
+                    <Button x:Name="TabDatiBtn" Classes="tab on" Content="Dati" />
+                    <Button x:Name="TabVarBtn" Grid.Column="1" Classes="tab">
+                      <TextBlock x:Name="TabVarText" Text="Variatori (0)" />
+                    </Button>
+                    <Button x:Name="TabInfoBtn" Grid.Column="2" Classes="tab" Content="Info" />
+                  </Grid>
+                </Border>
+
+                <!-- Dati -->
+                <StackPanel x:Name="TabDati" Spacing="8">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                    <TextBlock Classes="k" Text="Tipo" VerticalAlignment="Center" />
+                    <ComboBox x:Name="SelTypeCombo" Grid.Column="1" HorizontalAlignment="Stretch" FontSize="12.5" />
+                  </Grid>
+                  <TextBlock x:Name="AttachText" Classes="note" />
+                  <TextBlock x:Name="SelError" Classes="note" Foreground="{StaticResource ErrorBrush}" IsVisible="False" />
+
+                  <StackPanel x:Name="SelWidthPanel" Spacing="6">
+                    <TextBlock Classes="k" Text="Larghezza (m)" />
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="4">
+                      <Button x:Name="WMinus50" Content="−0,5" FontSize="11.5" Padding="6,4" />
+                      <Button x:Name="WMinus10" Grid.Column="1" Content="−0,1" FontSize="11.5" Padding="6,4" />
+                      <NumericUpDown x:Name="SelWidthBox" Grid.Column="2" Increment="0.1" FormatString="0.00" Minimum="0.05" Maximum="100" ShowButtonSpinner="False" FontSize="12" HorizontalContentAlignment="Center" />
+                      <Button x:Name="WPlus10" Grid.Column="3" Content="+0,1" FontSize="11.5" Padding="6,4" />
+                      <Button x:Name="WPlus50" Grid.Column="4" Content="+0,5" FontSize="11.5" Padding="6,4" />
+                    </Grid>
+                    <TextBlock x:Name="ProfileText" Classes="note" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                      <TextBlock Classes="k" TextWrapping="Wrap" Text="Ignora rientranze e sporgenze fino a (m)" VerticalAlignment="Center" />
+                      <NumericUpDown x:Name="SelSmoothBox" Grid.Column="1" Width="110" Increment="0.1" FormatString="0.00" Minimum="0" Maximum="10" FontSize="12" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Button x:Name="FlipSelBtn" Content="Inverti lato" />
+                      <Button x:Name="ResetProfileBtn" Content="Larghezza costante" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <StackPanel x:Name="LineBtns" Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="EditSelLineBtn">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconPencil}" Width="13" Height="13" />
+                        <TextBlock Text="Modifica la linea" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Button x:Name="RedrawLineBtn">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconRedo}" Width="13" Height="13" />
+                        <TextBlock Text="Ridisegnala da capo" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                  <StackPanel x:Name="DividerPanel" Spacing="6">
+                    <TextBlock Classes="k" Text="Strisce di mezzeria" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <ComboBox x:Name="DivStyleCombo" HorizontalAlignment="Stretch" FontSize="12">
+                        <ComboBoxItem>Tratteggiate</ComboBoxItem>
+                        <ComboBoxItem>Continue</ComboBoxItem>
+                        <ComboBoxItem>Doppie continue</ComboBoxItem>
+                      </ComboBox>
+                      <NumericUpDown x:Name="DivCountBox" Grid.Column="1" Width="120" Minimum="0" Maximum="8" Increment="1" FormatString="0" FontSize="12" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock x:Name="DivInfo" Classes="note" VerticalAlignment="Center" />
+                      <Button x:Name="DivAutoBtn" Classes="link" Content="Automatico" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel x:Name="StallPanel" Spacing="6">
+                    <CheckBox x:Name="StallCheck" Content="Linee bianche degli stalli di sosta" FontSize="12.5" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                      <TextBlock Classes="k" Text="Lunghezza degli stalli (m)" VerticalAlignment="Center" />
+                      <NumericUpDown x:Name="StallLenBox" Grid.Column="1" Width="120" Minimum="0.5" Maximum="50" Increment="0.5" FormatString="0.00" FontSize="12" />
+                    </Grid>
+                    <TextBlock x:Name="StallInfo" Classes="note" />
+                  </StackPanel>
+                  <TextBlock x:Name="SelRangeLabel" Classes="k" Text="Tratto sulla linea di aggancio (m)" />
+                  <Grid x:Name="SelRangeGrid" ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="6">
+                    <TextBlock Classes="k" Text="Da" VerticalAlignment="Center" />
+                    <NumericUpDown x:Name="SelFrom" Grid.Column="1" Increment="1" FormatString="0.00" Minimum="0" FontSize="12" />
+                    <TextBlock Grid.Column="2" Classes="k" Text="A" VerticalAlignment="Center" />
+                    <NumericUpDown x:Name="SelTo" Grid.Column="3" Increment="1" FormatString="0.00" Minimum="0" FontSize="12" />
+                  </Grid>
+
+
+                  <StackPanel x:Name="AlongPanel" Spacing="6" Margin="0,4,0,0">
+                    <TextBlock Classes="k" Text="Nuovo elemento affiancato, lungo come questo" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                      <Button x:Name="AddLeftBtn" Classes="wide" Content="◀ Aggiungi a sinistra" />
+                      <Button x:Name="AddRightBtn" Grid.Column="1" Classes="wide" Content="Aggiungi a destra ▶" />
+                    </Grid>
+                    <TextBlock Classes="note" Text="Destra e sinistra guardando la linea dall'inizio verso la fine (le frecce sulla mappa)." />
+                  </StackPanel>
+                  <Button x:Name="DeleteBtn">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
+                      <TextBlock Text="Elimina elemento" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+
+                <!-- Variatori di sezione -->
+                <StackPanel x:Name="TabVar" Spacing="8" IsVisible="False">
+                  <TextBlock x:Name="VarNotAvail" Classes="note" Text="I variatori di sezione si usano sugli elementi tracciati con una larghezza (non sui poligoni né sugli elementi riempiti tra due elementi)." />
+                  <!-- variatori di sezione: la larghezza cambia gradualmente tra due punti e resta cambiata dopo -->
+                  <StackPanel x:Name="VarPanel" Spacing="6">
+                    <TextBlock Classes="note" Text="Tra l'inizio e la fine del variatore la larghezza cambia gradualmente; oltre la fine resta quella nuova. Sulla mappa trascina i pallini per spostare l'inizio (bianco) e la fine (arancione)." />
+                    <StackPanel x:Name="VarList" Spacing="4" />
+                    <Button x:Name="AddVarBtn" Classes="wide">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconVariator}" Width="14" Height="14" />
+                        <TextBlock Text="Aggiungi variatore di sezione" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Border x:Name="VarPickPanel" Classes="inset" IsVisible="False">
+                      <StackPanel Spacing="6">
+                        <TextBlock x:Name="VarPickText" Classes="note" />
+                        <Button x:Name="CancelVarBtn" Content="Annulla" HorizontalAlignment="Left" />
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </StackPanel>
+
+                <!-- Info -->
+                <StackPanel x:Name="TabInfo" Spacing="8" IsVisible="False">
+                  <Border Classes="inset">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="4">
+                      <TextBlock x:Name="MLenLabel" Classes="k" Text="Estensione" />
+                      <TextBlock x:Name="MLen" Grid.Column="1" Classes="v" />
+                      <TextBlock Grid.Row="1" Classes="k" Text="Superficie" />
+                      <TextBlock x:Name="MArea" Grid.Row="1" Grid.Column="1" Classes="v" />
+                      <TextBlock Grid.Row="2" Classes="k" Text="Larghezza minima" />
+                      <TextBlock x:Name="MWMin" Grid.Row="2" Grid.Column="1" Classes="v" />
+                      <TextBlock Grid.Row="3" Classes="k" Text="Larghezza massima" />
+                      <TextBlock x:Name="MWMax" Grid.Row="3" Grid.Column="1" Classes="v" />
+                      <TextBlock Grid.Row="4" Classes="k" Text="Larghezza media" />
+                      <TextBlock x:Name="MWMean" Grid.Row="4" Grid.Column="1" Classes="v" />
+                    </Grid>
+                  </Border>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+      <!-- fotoinserimento aperto: occupa esattamente l'area della mappa -->
+      <Border x:Name="PhotoHost" IsVisible="False" Background="{StaticResource WindowBackground}" />
+    </Panel>
+  </DockPanel>
+</Window>

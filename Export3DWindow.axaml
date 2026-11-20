@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CicloDraft.Export3DWindow"
+        Title="CicloDraft · Esporta 3D"
+        Width="460" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        >
+  <StackPanel>
+    <Border Background="{StaticResource RailBackground}" Padding="16,12">
+      <StackPanel Spacing="2">
+        <TextBlock Text="Esporta 3D (glTF / GLB)" FontWeight="SemiBold" FontSize="15" />
+        <TextBlock Text="Per Blender, Twinmotion, Unreal, Unity, SketchUp e visualizzatori web" Foreground="{StaticResource TextSecondary}" FontSize="12" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="section">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="step" Text="ASPETTO" />
+        <CheckBox x:Name="TexturesCheck" FontSize="12" IsChecked="True">
+          <TextBlock TextWrapping="Wrap" FontSize="12" Text="Materiali realistici: asfalto, lastre di pietra, granito, coppi, facciate con finestre e negozi" />
+        </CheckBox>
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <CheckBox x:Name="TreesCheck" FontSize="12" IsChecked="True" Content="Alberi" />
+          <CheckBox x:Name="LightsCheck" FontSize="12" IsChecked="True" Content="Lampioni" />
+          <CheckBox x:Name="BikeSymCheck" FontSize="12" IsChecked="True" Content="Simboli bici" />
+          <CheckBox x:Name="SunCheck" FontSize="12" IsChecked="True" Content="Sole" />
+        </StackPanel>
+        <TextBlock x:Name="TreesText" Classes="note" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="section">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="step" Text="PROGETTO" />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+          <TextBlock Classes="k" Text="Altezza di marciapiedi e aiuole (m)" VerticalAlignment="Center" />
+          <NumericUpDown x:Name="CurbHBox" Grid.Column="1" Width="120" Value="0.15" Minimum="0" Maximum="0.5" Increment="0.01" FormatString="0.00" FontSize="12" />
+          <TextBlock Grid.Row="1" Classes="k" Text="Larghezza del cordolo (m)" VerticalAlignment="Center" />
+          <NumericUpDown x:Name="CurbWBox" Grid.Row="1" Grid.Column="1" Width="120" Value="0.15" Minimum="0.05" Maximum="0.5" Increment="0.01" FormatString="0.00" FontSize="12" />
+        </Grid>
+        <CheckBox x:Name="RaisedBikeCheck" FontSize="12" Content="Pista ciclabile rialzata alla quota del marciapiede" />
+        <CheckBox x:Name="MarkingsCheck" FontSize="12" IsChecked="True">
+          <TextBlock TextWrapping="Wrap" FontSize="12" Text="Segnaletica orizzontale (strisce della ciclabile, mezzeria, stalli)" />
+        </CheckBox>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="section">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="step" Text="CONTESTO" />
+        <CheckBox x:Name="BuildingsCheck" FontSize="12" IsChecked="True" Content="Edifici" />
+        <TextBlock x:Name="HeightsText" Classes="note" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+          <TextBlock Classes="k" TextWrapping="Wrap" Text="Altezza per gli edifici senza altezza nei dati (m)" VerticalAlignment="Center" />
+          <NumericUpDown x:Name="DefaultHBox" Grid.Column="1" Width="120" Value="10" Minimum="2" Maximum="200" Increment="0.5" FormatString="0.0" FontSize="12" />
+        </Grid>
+        <CheckBox x:Name="SidewalksCheck" FontSize="12" IsChecked="True" Content="Marciapiedi esistenti fuori dal progetto" />
+        <CheckBox x:Name="GroundCheck" FontSize="12" IsChecked="True" Content="Piano stradale (asfalto) sotto tutta l'area" />
+      </StackPanel>
+    </Border>
+
+    <Border Padding="14,12">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="note" Text="Unità: metri. Asse Y = quota, X = Est, −Z = Nord. L'origine della scena e il sistema di riferimento sono scritti nel file. Nel file ci sono due viste (ciclista e dall'alto) e la luce del sole." />
+        <TextBlock x:Name="StatusText" Classes="note" Foreground="{StaticResource TextPrimary}" />
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+          <Button x:Name="CloseBtn" Content="Chiudi" />
+          <Button x:Name="ExportBtn" Content="Esporta GLB…" Classes="accent" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</Window>
