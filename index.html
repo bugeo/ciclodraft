@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CicloDraft – disegno di ciclabili, marciapiedi e carreggiate</title>
+<meta name="description" content="CicloDraft è un programma per Windows e Mac per disegnare piste ciclabili, marciapiedi e carreggiate su un GeoPackage ed esportarli in DXF, 3D e fotoinserimento.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:title" content="CicloDraft">
+<meta property="og:description" content="Disegna piste ciclabili, marciapiedi e carreggiate su un GeoPackage ed esporta in DXF, 3D e fotoinserimento.">
+<meta property="og:image" content="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --verde-scuro:#0B5A24; --verde:#1E9E3A; --verde-chiaro:#52B101; --verde-tenue:#EAF6E3;
+  --inchiostro:#16211A; --testo:#3A463D; --grigio:#6B776E; --bordo:#DDE6DF; --fondo:#FFFFFF; --fondo2:#F5F8F5;
+  --asfalto:#2B3036; --resina:#D6553F;
+  --raggio:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--fondo);color:var(--testo);font:16px/1.6 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+img{max-width:100%;height:auto;display:block}
+a{color:var(--verde-scuro)}
+h1,h2,h3{font-family:Nunito,Inter,system-ui,sans-serif;color:var(--inchiostro);line-height:1.15;text-wrap:balance;margin:0}
+h2{font-size:clamp(1.7rem,3.4vw,2.4rem);font-weight:900}
+h3{font-size:1.15rem;font-weight:800}
+.wrap{max-width:1160px;margin:0 auto;padding-inline:max(20px,env(safe-area-inset-left,0px))}
+.etichetta{display:inline-block;font:600 .78rem/1 Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--verde);margin-bottom:.8rem}
+
+/* barra in alto */
+header.barra{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--bordo)}
+header.barra .wrap{display:flex;align-items:center;gap:20px;height:64px}
+header.barra img{height:34px;width:auto}
+header.barra nav{margin-left:auto;display:flex;gap:22px;align-items:center}
+header.barra nav a{text-decoration:none;color:var(--testo);font-weight:500;font-size:.95rem}
+header.barra nav a:hover{color:var(--verde-scuro)}
+@media (max-width:760px){header.barra nav a.secondario{display:none}header.barra img{height:28px}}
+
+/* pulsanti */
+.btn{display:inline-flex;align-items:center;gap:.55em;padding:.8em 1.25em;border-radius:10px;font-weight:600;text-decoration:none;border:1.5px solid transparent;transition:transform .12s, box-shadow .12s, background .12s}
+.btn svg{width:1.1em;height:1.1em}
+.btn.primario{background:var(--verde-scuro);color:#fff;box-shadow:0 6px 18px -8px rgba(11,90,36,.7)}
+.btn.primario:hover{background:#08481C;transform:translateY(-1px)}
+.btn.secondario{background:#fff;color:var(--verde-scuro);border-color:var(--bordo)}
+.btn.secondario:hover{border-color:var(--verde)}
+.btn.piccolo{padding:.5em .9em;font-size:.9rem}
+
+/* apertura */
+.apertura{padding:64px 0 40px;background:
+  radial-gradient(900px 380px at 85% -10%, var(--verde-tenue), transparent 70%),
+  linear-gradient(var(--fondo),var(--fondo))}
+.apertura .griglia{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:48px;align-items:center}
+.apertura h1{font-size:clamp(2.2rem,5vw,3.6rem);font-weight:900;letter-spacing:-.01em}
+.apertura h1 em{font-style:normal;color:var(--verde-chiaro)}
+.apertura p.lead{font-size:1.15rem;max-width:34em;margin:1.1rem 0 1.8rem}
+.apertura .azioni{display:flex;flex-wrap:wrap;gap:12px}
+.apertura .nota{font-size:.88rem;color:var(--grigio);margin-top:14px}
+.schermo{border-radius:12px;overflow:hidden;box-shadow:0 30px 60px -28px rgba(22,33,26,.45),0 0 0 1px rgba(22,33,26,.08);background:var(--asfalto)}
+.schermo .tetto{display:flex;gap:6px;padding:9px 12px;background:#1E2228}
+.schermo .tetto i{width:10px;height:10px;border-radius:50%;background:#3A4048}
+@media (max-width:900px){.apertura .griglia{grid-template-columns:minmax(0,1fr)}.apertura{padding-top:36px}}
+
+/* strip "corsia" decorativa */
+.corsia{height:10px;background:repeating-linear-gradient(90deg,var(--asfalto) 0 40px,#fff 40px 64px);opacity:.9}
+
+section{padding:76px 0}
+section.alterna{background:var(--fondo2)}
+.intro{max-width:44em;margin-bottom:40px}
+.intro p{margin:.8rem 0 0;font-size:1.05rem}
+
+/* funzioni */
+.funzioni{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.funzione{background:#fff;border:1px solid var(--bordo);border-radius:var(--raggio);padding:22px 22px 20px}
+.funzione .ico{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:var(--verde-tenue);color:var(--verde-scuro);margin-bottom:14px}
+.funzione .ico svg{width:22px;height:22px}
+.funzione p{margin:.5rem 0 0;font-size:.95rem}
+@media (max-width:900px){.funzioni{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){.funzioni{grid-template-columns:1fr}}
+
+/* elementi (colori come sulla mappa) */
+.elementi{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.elementi span{display:inline-flex;align-items:center;gap:8px;padding:.45em .85em;border-radius:999px;background:#fff;border:1px solid var(--bordo);font-size:.92rem}
+.elementi i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* galleria a schede */
+.schede{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.schede button{font:600 .92rem Inter,sans-serif;border:1px solid var(--bordo);background:#fff;color:var(--testo);padding:.55em 1em;border-radius:999px;cursor:pointer}
+.schede button[aria-selected="true"]{background:var(--verde-scuro);border-color:var(--verde-scuro);color:#fff}
+.galleria figure{margin:0}
+.galleria figcaption{margin-top:14px;color:var(--grigio);font-size:.95rem;max-width:52em}
+
+/* passi */
+.passi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;counter-reset:passo}
+.passo{position:relative;padding:22px;border-radius:var(--raggio);background:#fff;border:1px solid var(--bordo)}
+.passo::before{counter-increment:passo;content:counter(passo);font:900 1.1rem Nunito,sans-serif;color:#fff;background:var(--verde);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;margin-bottom:12px}
+.passo p{margin:.45rem 0 0;font-size:.95rem}
+@media (max-width:900px){.passi{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.passi{grid-template-columns:1fr}}
+
+/* esportazioni */
+.export{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.formato{border-radius:var(--raggio);padding:22px;background:var(--asfalto);color:#E7ECE8}
+.formato b{display:block;font:900 1.6rem Nunito,sans-serif;color:#fff}
+.formato small{color:#A9C4AE;font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-size:.75rem}
+.formato p{margin:.6rem 0 0;font-size:.93rem;color:#C9D3CC}
+@media (max-width:900px){.export{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.export{grid-template-columns:1fr}}
+
+/* due colonne */
+.duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:44px;align-items:center}
+.duo ul{padding-left:1.1em;margin:1rem 0 0}
+.duo li{margin:.35rem 0}
+@media (max-width:900px){.duo{grid-template-columns:minmax(0,1fr)}}
+
+/* scarica */
+.scarica{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.piattaforma{min-width:0;background:#fff;border:1px solid var(--bordo);border-radius:var(--raggio);padding:24px;display:flex;flex-direction:column;gap:10px}
+.piattaforma p{margin:0;font-size:.93rem}
+.piattaforma .btn{margin-top:auto;align-self:flex-start}
+code{font:500 .86em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--verde-tenue);color:var(--verde-scuro);padding:.12em .4em;border-radius:5px}
+pre{background:var(--asfalto);color:#E7ECE8;padding:14px 16px;border-radius:10px;overflow-x:auto;font:13px/1.55 ui-monospace,Menlo,Consolas,monospace;margin:.4rem 0 0}
+@media (max-width:900px){.scarica{grid-template-columns:1fr}}
+
+footer{padding:40px 0 48px;border-top:1px solid var(--bordo);color:var(--grigio);font-size:.9rem}
+footer .wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:center}
+footer img{height:28px;width:auto}
+footer nav{margin-left:auto;display:flex;gap:18px}
+footer a{color:var(--grigio)}
+</style>
+</head>
+<body>
+
+<header class="barra">
+  <div class="wrap">
+    <a href="#" aria-label="CicloDraft"><img src="img/logo.png" alt="CicloDraft"></a>
+    <nav>
+      <a class="secondario" href="#funzioni">Funzioni</a>
+      <a class="secondario" href="#schermate">Schermate</a>
+      <a class="secondario" href="#esportazioni">Esportazioni</a>
+      <a href="https://github.com/bugeo/ciclodraft/wiki">Wiki</a>
+      <a class="btn primario piccolo" href="#scarica">Scarica</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="apertura">
+  <div class="wrap griglia">
+    <div>
+      <span class="etichetta">Progettazione della mobilità attiva</span>
+      <h1>Ciclabili, marciapiedi e carreggiate, <em>disegnati sui dati veri</em>.</h1>
+      <p class="lead">CicloDraft apre il GeoPackage della tua cartografia (anche il DBGT comunale), si aggancia ai muri degli edifici e ai marciapiedi esistenti e ti fa disegnare la nuova sezione stradale in metri. Poi esporti in DXF, in 3D e direttamente sulla foto della via.</p>
+      <div class="azioni">
+        <a class="btn primario" href="#scarica">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+          Scarica per Windows e Mac
+        </a>
+        <a class="btn secondario" href="https://github.com/bugeo/ciclodraft">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12,2A10,10 0 0,0 2,12C2,16.42 4.87,20.17 8.84,21.5C9.34,21.58 9.5,21.27 9.5,21C9.5,20.77 9.5,20.14 9.5,19.31C6.73,19.91 6.14,17.97 6.14,17.97C5.68,16.81 5.03,16.5 5.03,16.5C4.12,15.88 5.1,15.9 5.1,15.9C6.1,15.97 6.63,16.93 6.63,16.93C7.5,18.45 8.97,18 9.54,17.76C9.63,17.11 9.89,16.67 10.17,16.42C7.95,16.17 5.62,15.31 5.62,11.5C5.62,10.39 6,9.5 6.65,8.79C6.55,8.54 6.2,7.5 6.75,6.15C6.75,6.15 7.59,5.88 9.5,7.17C10.29,6.95 11.15,6.84 12,6.84C12.85,6.84 13.71,6.95 14.5,7.17C16.41,5.88 17.25,6.15 17.25,6.15C17.8,7.5 17.45,8.54 17.35,8.79C18,9.5 18.38,10.39 18.38,11.5C18.38,15.32 16.04,16.16 13.81,16.41C14.17,16.72 14.5,17.33 14.5,18.26C14.5,19.6 14.5,20.68 14.5,21.09C14.5,21.36 14.66,21.67 15.17,21.58C19.14,20.16 22,16.42 22,12A10,10 0 0,0 12,2Z"/></svg>
+          Codice su GitHub
+        </a>
+      </div>
+      <p class="nota">Software libero (GPL v3) · Windows 10/11 e macOS (Apple Silicon e Intel) · funziona senza internet</p>
+    </div>
+    <div class="schermo">
+      <div class="tetto"><i></i><i></i><i></i></div>
+      <img src="img/selezione.webp" width="1500" height="900" alt="CicloDraft: una carreggiata selezionata con il riquadro Elemento selezionato">
+    </div>
+  </div>
+</section>
+<div class="corsia" aria-hidden="true"></div>
+
+<section id="funzioni">
+  <div class="wrap">
+    <div class="intro">
+      <span class="etichetta">Cosa fa</span>
+      <h2>Dalla cartografia al progetto, nello stesso programma</h2>
+      <p>Ogni elemento è parametrico: cambi larghezza, tipo o tracciato e superfici, larghezze minime e massime, DXF e 3D si aggiornano da soli.</p>
+    </div>
+    <div class="funzioni">
+      <div class="funzione">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,17.25V21H6.75L17.81,9.94L14.06,6.19L3,17.25M20.71,7.04C21.1,6.65 21.1,6.02 20.71,5.63L18.37,3.29C17.98,2.9 17.35,2.9 16.96,3.29L15.13,5.12L18.88,8.87L20.71,7.04Z"/></svg></div>
+        <h3>Tracciato o poligono</h3>
+        <p>Disegni il bordo, l'interasse o il contorno: il punto si aggancia a muri, marciapiedi esistenti ed elementi già disegnati, e può seguirne il profilo.</p>
+      </div>
+      <div class="funzione">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2,7H9L15,4H22V6H15.5L9.5,9H2V7M2,15H9.5L15.5,18H22V20H15L9,17H2V15M5,11H19V13H5V11Z"/></svg></div>
+        <h3>Variatori di sezione</h3>
+        <p>La larghezza cambia gradualmente tra due punti e resta cambiata dopo: allargamenti e restringimenti di 10 cm alla volta, con i capi da trascinare sulla mappa.</p>
+      </div>
+      <div class="funzione">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.59,13.41C11,13.8 11,14.44 10.59,14.83C10.2,15.22 9.56,15.22 9.17,14.83C7.22,12.88 7.22,9.71 9.17,7.76V7.76L12.71,4.22C14.66,2.27 17.83,2.27 19.78,4.22C21.73,6.17 21.73,9.34 19.78,11.29L18.29,12.78C18.3,11.96 18.17,11.14 17.89,10.36L18.36,9.88C19.54,8.71 19.54,6.81 18.36,5.64C17.19,4.46 15.29,4.46 14.12,5.64L10.59,9.17C9.41,10.34 9.41,12.24 10.59,13.41M13.41,9.17C13.8,8.78 14.44,8.78 14.83,9.17C16.78,11.12 16.78,14.29 14.83,16.24V16.24L11.29,19.78C9.34,21.73 6.17,21.73 4.22,19.78C2.27,17.83 2.27,14.66 4.22,12.71L5.71,11.22C5.7,12.04 5.83,12.86 6.11,13.65L5.64,14.12C4.46,15.29 4.46,17.19 5.64,18.36C6.81,19.54 8.71,19.54 9.88,18.36L13.41,14.83C14.59,13.66 14.59,11.76 13.41,10.59C13,10.2 13,9.56 13.41,9.17Z"/></svg></div>
+        <h3>Elementi agganciati</h3>
+        <p>Una ciclabile che costeggia due marciapiedi li segue quando si allargano. «Aggiungi a destra / a sinistra» crea in un clic un elemento affiancato, lungo come l'originale.</p>
+      </div>
+      <div class="funzione">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M11,7H13V17H11V7M7,11H9V17H7V11M15,9H17V17H15V9Z"/></svg></div>
+        <h3>Misure sempre aggiornate</h3>
+        <p>Estensione, superficie, larghezza minima, massima e media di ogni elemento e totali per tipo, pronti per il computo.</p>
+      </div>
+      <div class="funzione">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/></svg></div>
+        <h3>Fotoinserimento</h3>
+        <p>Calcola la fotocamera da 6–8 punti di controllo e disegna il progetto in prospettiva sulla foto della via, con ombre, maschera e rimozione delle auto che coprono il tracciato.</p>
+      </div>
+      <div class="funzione">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M7,7H17V5H19V19H5V5H7V7Z"/></svg></div>
+        <h3>Ritaglio dei dati grandi</h3>
+        <p>Dal DBGT comunale (anche oltre 100 MB e 80 livelli) estrai solo l'area di progetto e i livelli utili: un GeoPackage leggero in meno di un secondo.</p>
+      </div>
+    </div>
+
+    <div class="elementi" aria-label="Tipi di elemento">
+      <span><i style="background:#BBA781"></i>Marciapiede</span>
+      <span><i style="background:#D6603F"></i>Pista ciclabile</span>
+      <span><i style="background:#E8906F"></i>Corsia ciclabile</span>
+      <span><i style="background:#6B7280"></i>Carreggiata</span>
+      <span><i style="background:#93A3B8"></i>Corsia</span>
+      <span><i style="background:#7D8696"></i>Corsia doppia</span>
+      <span><i style="background:#6E9BC9"></i>Parcheggio</span>
+      <span><i style="background:#86B068"></i>Aiuola / verde</span>
+      <span><i style="background:#F2C318"></i>Striscia gialla</span>
+    </div>
+  </div>
+</section>
+
+<section id="schermate" class="alterna">
+  <div class="wrap">
+    <div class="intro">
+      <span class="etichetta">Schermate</span>
+      <h2>Un'interfaccia che ti guida passo per passo</h2>
+      <p>Il riquadro con la cornice verde è sempre quello su cui agire; i comandi per l'elemento compaiono sopra la mappa solo quando servono.</p>
+    </div>
+    <div class="schede" role="tablist">
+      <button role="tab" aria-selected="true" data-i="0">Panoramica</button>
+      <button role="tab" aria-selected="false" data-i="1">Livelli</button>
+      <button role="tab" aria-selected="false" data-i="2">Elemento selezionato</button>
+      <button role="tab" aria-selected="false" data-i="3">Variatori di sezione</button>
+      <button role="tab" aria-selected="false" data-i="4">Parcheggi</button>
+      <button role="tab" aria-selected="false" data-i="5">Fotoinserimenti</button>
+      <button role="tab" aria-selected="false" data-i="6">Vista ruotata</button>
+    </div>
+    <figure class="galleria">
+      <div class="schermo"><div class="tetto"><i></i><i></i><i></i></div>
+        <img id="foto" src="img/panoramica.webp" width="1500" height="900" alt="">
+      </div>
+      <figcaption id="didascalia"></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="come">
+  <div class="wrap">
+    <div class="intro">
+      <span class="etichetta">Come si lavora</span>
+      <h2>Quattro passi, dal GeoPackage al disegno</h2>
+    </div>
+    <div class="passi">
+      <div class="passo"><h3>Apri i dati</h3><p>Un GeoPackage in coordinate metriche o un progetto <code>.ciclo</code> salvato. Per i file molto grandi c'è <i>Ritaglia dati</i>.</p></div>
+      <div class="passo"><h3>Conferma i livelli</h3><p>Per ogni livello scegli il ruolo (muri, marciapiedi, sfondo, edifici 3D) e se vederlo: il programma li propone dal nome.</p></div>
+      <div class="passo"><h3>Aggiungi elementi</h3><p>Scegli il tipo e la modalità, disegna sulla mappa, imposta la larghezza e premi <i>Disegna</i>.</p></div>
+      <div class="passo"><h3>Esporta</h3><p>DXF per il CAD, CSV per il computo, GLB per il rendering e immagine del fotoinserimento.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="esportazioni" class="alterna">
+  <div class="wrap">
+    <div class="intro">
+      <span class="etichetta">Esportazioni</span>
+      <h2>Il progetto esce pronto per il prossimo passaggio</h2>
+    </div>
+    <div class="export">
+      <div class="formato"><small>CAD</small><b>DXF</b><p>R12 in metri, nel sistema di riferimento del GeoPackage. Un layer per tipo, segnaletica, assi e testi con le misure.</p></div>
+      <div class="formato"><small>3D</small><b>GLB</b><p>glTF 2.0 con texture: facciate, cordoli, segnaletica, alberi e lampioni. Si apre in Blender, Twinmotion, Unreal, SketchUp.</p></div>
+      <div class="formato"><small>Foto</small><b>PNG</b><p>Il progetto in prospettiva sulla foto, più un livello trasparente con il solo progetto per il fotoritocco.</p></div>
+      <div class="formato"><small>Computo</small><b>CSV</b><p>Lunghezze, superfici e larghezze di tutti gli elementi, da aprire in Excel.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="foto">
+  <div class="wrap duo">
+    <div class="schermo"><div class="tetto"><i></i><i></i><i></i></div>
+      <img src="img/fotoinserimenti.webp" width="1500" height="900" alt="Mappa con l'icona di un fotoinserimento e il cono di vista della fotocamera">
+    </div>
+    <div>
+      <span class="etichetta">Fotoinserimento</span>
+      <h2>Il progetto sulla foto della via</h2>
+      <p>Abbini qualche punto della foto alla mappa e CicloDraft ricostruisce posizione, direzione e obiettivo della fotocamera. Il progetto viene disegnato con texture, cordoli e segnaletica; gli edifici lo coprono dove serve e le ombre della foto vi si posano sopra.</p>
+      <ul>
+        <li>Tutti i fotoinserimenti restano nel progetto e si riaprono con un clic.</li>
+        <li>Sulla mappa un occhio indica dove è stata scattata la foto e dove guarda.</li>
+        <li><b>Rimuovi auto</b>: le auto che toccano il tracciato vengono cancellate e la foto ricostruita (modelli ONNX, senza internet).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="scarica" class="alterna">
+  <div class="wrap">
+    <div class="intro">
+      <span class="etichetta">Scarica</span>
+      <h2>Pronto all'uso, senza installazione</h2>
+      <p>Le versioni compilate sono nelle <a href="https://github.com/bugeo/ciclodraft/releases">release del repository</a>. La guida completa è nel <a href="https://github.com/bugeo/ciclodraft/wiki">wiki</a>.</p>
+    </div>
+    <div class="scarica">
+      <div class="piattaforma">
+        <h3>Windows</h3>
+        <p>Un solo file, <code>CicloDraft.exe</code>: scaricalo e aprilo. Windows 10 o 11, 64 bit.</p>
+        <a class="btn primario" href="https://github.com/bugeo/ciclodraft/releases/latest">Scarica per Windows</a>
+      </div>
+      <div class="piattaforma">
+        <h3>macOS</h3>
+        <p><code>CicloDraft-mac-AppleSilicon.zip</code> (M1–M4) o <code>CicloDraft-mac-Intel.zip</code>. L'app non è firmata: la prima volta, nel Terminale:</p>
+        <pre>xattr -cr /Applications/CicloDraft.app
+codesign --force --deep --sign - /Applications/CicloDraft.app</pre>
+        <a class="btn primario" href="https://github.com/bugeo/ciclodraft/releases/latest">Scarica per Mac</a>
+      </div>
+      <div class="piattaforma">
+        <h3>Dal codice</h3>
+        <p>Con il .NET 8 SDK, su Windows, macOS o Linux:</p>
+        <pre>git clone https://github.com/bugeo/ciclodraft
+cd ciclodraft
+dotnet run -c Release</pre>
+        <a class="btn secondario" href="https://github.com/bugeo/ciclodraft">Vai al repository</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <img src="img/logo.png" alt="CicloDraft">
+    <span>Disegno di ciclabili, marciapiedi e carreggiate · software libero con licenza <a href="https://github.com/bugeo/ciclodraft/blob/main/LICENSE">GPL v3</a>.</span>
+    <nav>
+      <a href="https://github.com/bugeo/ciclodraft">GitHub</a>
+      <a href="https://github.com/bugeo/ciclodraft/wiki">Wiki</a>
+      <a href="https://github.com/bugeo/ciclodraft/releases">Release</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+const viste = [
+  ["panoramica", "Il progetto sulla mappa: elementi colorati per tipo, elenco con le superfici e totali per tipo a sinistra."],
+  ["livelli", "Primo passo dopo l'apertura: ruolo e visibilità di ogni livello del GeoPackage."],
+  ["selezione", "Un elemento selezionato: tipo, larghezza, linea, strisce di mezzeria ed elementi da affiancare a destra o a sinistra."],
+  ["variatori", "Due variatori di sezione su una carreggiata: da 6,00 a 7,00 m e poi a 6,50 m, con il tratto di passaggio in arancione."],
+  ["parcheggio", "Parcheggio in linea: linee degli stalli attivabili e lunghezza dello stallo configurabile."],
+  ["fotoinserimenti", "Riquadro Fotoinserimenti e icona sulla mappa con la direzione della fotocamera."],
+  ["rotazione", "La vista si ruota di 5° alla volta, per esempio per avere la via in orizzontale."]
+];
+const foto = document.getElementById("foto"), did = document.getElementById("didascalia");
+function mostra(i){
+  foto.src = "img/" + viste[i][0] + ".webp"; foto.alt = viste[i][1]; did.textContent = viste[i][1];
+  document.querySelectorAll(".schede button").forEach(b => b.setAttribute("aria-selected", b.dataset.i == i));
+}
+document.querySelectorAll(".schede button").forEach(b => b.addEventListener("click", () => mostra(+b.dataset.i)));
+mostra(0);
+</script>
+</body>
+</html>
