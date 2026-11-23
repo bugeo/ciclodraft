@@ -30,8 +30,10 @@ public class MapCanvas : Control
     double _cx, _cy, _s = 2;
     Point? _panLast;
     int _dragKey = -1; bool _keyMoved;
+    (int i, int sign)? _dragHandle;
     bool _dragging;
     (int i, bool end)? _dragVar;
+    int _dragSecEnd = -1;
     Point _lastScreen;
 
     public event Action<V2?>? PointerWorldMoved;
@@ -60,6 +62,9 @@ public class MapCanvas : Control
     static readonly IBrush Hover = B("#E7A500");
     static readonly IBrush Range = B("#FF7A00", 170);
     static readonly IBrush SelBrush = B("#1565C0");
+    static readonly IBrush MultiFill = B("#1565C0", 64);
+    static readonly IBrush AreaFill = B("#2FCB79", 85);
+    static readonly IBrush AreaStroke = B("#1E9E5A");
     static readonly IBrush SnapBrush = B("#D81B60");
     static readonly IBrush TextBrush = B("#1E2833");
     static readonly IBrush LabelBg = B("#FFFFFF", 215);
@@ -186,6 +191,32 @@ public class MapCanvas : Control
     public event Action? ViewChanged;
     double Tol => TolPx / _s;
 
+    /// <summary>
+    /// Inquadra tutti i punti al massimo ingrandimento possibile dentro l'area libera della mappa
+    /// (free = margini occupati da pulsanti e riquadri sopra la mappa), tenendo conto della rotazione.
+    /// </summary>
+    public bool FitPoints(IEnumerable<V2> pts, Thickness free)
+    {
+        double W = Bounds.Width, H = Bounds.Height;
+        if (W < 10 || H < 10) return false;
+        double c = Cos, s = Sin;
+        double x0 = double.MaxValue, x1 = double.MinValue, y0 = double.MaxValue, y1 = double.MinValue;
+        foreach (var p in pts)
+        {
+            double rx = p.X * c - p.Y * s, ry = p.X * s + p.Y * c;
+            if (rx < x0) x0 = rx; if (rx > x1) x1 = rx; if (ry < y0) y0 = ry; if (ry > y1) y1 = ry;
+        }
+        if (x0 > x1) return false;
+        double fw = Math.Max(40, W - free.Left - free.Right), fh = Math.Max(40, H - free.Top - free.Bottom);
+        _s = Math.Clamp(Math.Min(fw / Math.Max(x1 - x0, 0.5), fh / Math.Max(y1 - y0, 0.5)), 1e-4, 2000);
+        double fx = free.Left + fw / 2, fy = free.Top + fh / 2;
+        double rx0 = (x0 + x1) / 2 - (fx - W / 2) / _s, ry0 = (y0 + y1) / 2 + (fy - H / 2) / _s;
+        _cx = rx0 * c + ry0 * s; _cy = -rx0 * s + ry0 * c;
+        InvalidateVisual();
+        ViewChanged?.Invoke();
+        return true;
+    }
+
     public void ZoomTo(BBox b)
     {
         if (b.IsEmpty || Bounds.Width < 10) { _cx = 0; _cy = 0; _s = 2; InvalidateVisual(); return; }
@@ -267,7 +298,8 @@ public class MapCanvas : Control
         elements:
         using (ctx.PushTransform(WorldToScreen))
         {
-            foreach (var e in ed.Project.Elements)
+            // prima gli elementi più grandi, poi quelli più piccoli: un parcheggio disegnato dentro la carreggiata resta visibile
+            foreach (var e in ed.Project.Shown.OrderByDescending(x => x.Metrics.Area))
             {
                 if (e.Polygon.Count < 3) continue;
                 var (f, s) = Colors(e.Type);
@@ -300,7 +332,7 @@ public class MapCanvas : Control
 
             foreach (var e in ed.Project.Edges)
             {
-                if (e.Points.Count < 2) continue;
+                if (e.Points.Count < 2 || !ed.Project.IsShown(e)) continue;
                 if (e.Owner == -1) ctx.DrawGeometry(null, P(RoadEdge, 2.6), Line(e.Points));          // bordo strada dei progetti precedenti
                 else if (e.Owner == -2) ctx.DrawGeometry(null, P(SelBrush, 2.2), Line(e.Points));     // linea appena disegnata
                 else if (ed.Project.Find(e.Owner) is { Centered: true })                                // interasse
@@ -322,6 +354,13 @@ public class MapCanvas : Control
                     ctx.DrawGeometry(null, P(Hover, 4), Line(ol));
             }
 
+            foreach (var ms in ed.MultiSel)
+                if (ms.Polygon.Count >= 3) ctx.DrawGeometry(MultiFill, P(SelBrush, 2.4), Line(ms.Polygon, true, true));
+            foreach (var part in ed.AreaParts)
+                ctx.DrawGeometry(AreaFill, P(AreaStroke, 1.2, new DashStyle(new double[] { 4, 3 }, 0), PenLineCap.Flat), Line(part, true, true));
+            if (ed.AreaParts.Count + ed.MultiSel.Count > 1)
+                foreach (var pa in ed.PickedRings) ctx.DrawGeometry(null, P(AreaStroke, 2.6), Line(pa, true));
+
             if (ed.Selected is { } sel && sel.Polygon.Count >= 3)
             {
                 ctx.DrawGeometry(null, P(SelBrush, 2), Line(sel.Polygon, true));
@@ -341,12 +380,13 @@ public class MapCanvas : Control
         foreach (var e in ed.Project.Edges)
             if (e.Points.Count >= 2 && e.Owner == -1) DrawEdgeDecor(ctx, e);
 
-        foreach (var e in ed.Project.Elements)
+        foreach (var e in ed.Project.Shown)
             if (e.Error == null && e.Polygon.Count >= 3) { if (ShowLabels) DrawElementLabel(ctx, e); }
             else if (e.Error != null && ed.Project.GetEdge(e.Base) is { } bl2)
                 Label(ctx, ToScreen(PL.PointAt(bl2, e.Start)), "⚠ " + e.Name + ": " + e.Error, ErrBrush);
 
         if (ShowPhotoIcons) DrawPhotoIcons(ctx, ed);
+        DrawSections(ctx, ed);
 
         // elemento tracciato selezionato: verso della linea (frecce, inizio/fine) e lati destro/sinistro,
         // per «Aggiungi a destra / a sinistra»
@@ -355,7 +395,19 @@ public class MapCanvas : Control
 
         if (ed.Mode == Mode.EditLine && ed.EditEdge is { Anchors: { } an } eed)
         {
-            if (eed.Points.Count >= 2) ctx.DrawGeometry(null, new Pen(SelBrush, 2.4), ScreenLine(eed.Points));
+            bool closedEdit = ed.EditIsPolygon;
+            if (eed.Points.Count >= 2)
+                ctx.DrawGeometry(null, new Pen(SelBrush, 2.4), ScreenLine(closedEdit ? eed.Points.Append(eed.Points[0]).ToList() : eed.Points));
+            // maniglie dei punti in curva
+            var hPen = new Pen(SelBrush, 1.2);
+            foreach (var ca in an.Where(a => a.Curve))
+            {
+                var P = new V2(ca.X, ca.Y); var H = new V2(ca.Hx, ca.Hy);
+                var h1 = ToScreen(P + H); var h2 = ToScreen(P - H);
+                ctx.DrawLine(hPen, h2, h1);
+                ctx.DrawEllipse(Brushes.White, new Pen(SelBrush, 1.6), h1, 4, 4);
+                ctx.DrawEllipse(Brushes.White, new Pen(SelBrush, 1.6), h2, 4, 4);
+            }
             if (ed.EditExtend != 0 && an.Count > 0 && ed.Mouse is { } mm)
             {
                 var endA = ed.EditExtend > 0 ? an[^1] : an[0];
@@ -365,13 +417,14 @@ public class MapCanvas : Control
             {
                 if (an[i].Auto) continue;
                 var sp = ToScreen(new V2(an[i].X, an[i].Y));
-                bool sel = i == ed.EditSel, end = i == 0 || i == an.Count - 1;
+                bool sel = i == ed.EditSel, end = !closedEdit && (i == 0 || i == an.Count - 1);
                 IBrush fill = sel ? SelBrush : an[i].El >= 0 ? SnapBrush : Brushes.White;
                 double rr = sel ? 6 : 4.5;
                 if (end) ctx.DrawEllipse(fill, new Pen(SelBrush, 2), sp, rr + 1, rr + 1);
+                else if (an[i].Curve) ctx.DrawEllipse(fill, new Pen(SelBrush, 1.6), sp, rr, rr);
                 else ctx.DrawRectangle(fill, new Pen(SelBrush, 1.6), new Rect(sp.X - rr, sp.Y - rr, 2 * rr, 2 * rr));
             }
-            if (an.Count > 0)
+            if (an.Count > 0 && !closedEdit)
             {
                 Label(ctx, ToScreen(new V2(an[0].X, an[0].Y)) + new Vector(10, -22), "inizio", TextBrush);
                 Label(ctx, ToScreen(new V2(an[^1].X, an[^1].Y)) + new Vector(10, 6), "fine", TextBrush);
@@ -514,6 +567,62 @@ public class MapCanvas : Control
             ctx.DrawEllipse(CamAccent, null, c + d * 1.2, 2.6, 2.6);
             if (ShowLabels) Label(ctx, c + new Vector(CamR + 4, CamR - 2), r.Name, TextBrush);
         }
+    }
+
+    static readonly IBrush SecInk = new SolidColorBrush(Color.Parse("#FF111111"));
+    static readonly IBrush SecHalo = new SolidColorBrush(Color.Parse("#CCFFFFFF"));
+
+    /// <summary>Sezioni: linea nera A–B con, ai due capi, una freccia verso cui si guarda la sezione.</summary>
+    void DrawSections(DrawingContext ctx, Editor ed)
+    {
+        foreach (var s in ed.Project.Sections)
+        {
+            bool sel = s == ed.SelectedSection;
+            var a = ToScreen(s.A); var b = ToScreen(s.B);
+            double w = sel ? 3.2 : 2.2;
+            ctx.DrawLine(new Pen(SecHalo, w + 3, lineCap: PenLineCap.Round), a, b);
+            ctx.DrawLine(new Pen(SecInk, w, lineCap: PenLineCap.Round), a, b);
+            var v = ScreenDir(s.ViewDir);
+            foreach (var e in new[] { a, b }) DrawSectionArrow(ctx, e, v, w);
+            // nome vicino ad A, dalla parte opposta alla freccia
+            var lab = a - v * 16 - new Vector(0, 8);
+            Label(ctx, lab, s.Name, TextBrush, sel);
+            if (sel)
+                foreach (var (p, t) in new[] { (a, "A"), (b, "B") })
+                {
+                    ctx.DrawEllipse(Brushes.White, new Pen(SecInk, 2), p, 6.5, 6.5);
+                    var ft = Text(t, 9.5, SecInk, true);
+                    ctx.DrawText(ft, p - new Vector(ft.Width / 2, ft.Height / 2));
+                }
+        }
+        if (ed.Mode == Mode.PickSection)
+        {
+            var m = ed.Snap?.P ?? ed.Mouse;
+            if (ed.SectionA is { } a0)
+            {
+                var a = ToScreen(a0);
+                if (m is { } mm) ctx.DrawLine(new Pen(SecInk, 2, new DashStyle(new double[] { 4, 3 }, 0)), a, ToScreen(mm));
+                ctx.DrawEllipse(Brushes.White, new Pen(SecInk, 2), a, 6.5, 6.5);
+                var ft = Text("A", 9.5, SecInk, true); ctx.DrawText(ft, a - new Vector(ft.Width / 2, ft.Height / 2));
+            }
+            if (ed.Snap is { } sn)
+            {
+                var sp = ToScreen(sn.P); var pen = new Pen(SnapBrush, 2);
+                if (sn.Vertex) ctx.DrawRectangle(null, pen, new Rect(sp.X - 6, sp.Y - 6, 12, 12));
+                else { ctx.DrawLine(pen, sp + new Vector(-5, -5), sp + new Vector(5, 5)); ctx.DrawLine(pen, sp + new Vector(-5, 5), sp + new Vector(5, -5)); }
+            }
+        }
+    }
+
+    static void DrawSectionArrow(DrawingContext ctx, Point e, Vector v, double w)
+    {
+        const double len = 22, head = 8;
+        var tip = e + v * len; var n = new Vector(-v.Y, v.X);
+        ctx.DrawLine(new Pen(SecHalo, w + 3, lineCap: PenLineCap.Round), e, tip);
+        ctx.DrawLine(new Pen(SecInk, w, lineCap: PenLineCap.Round), e, tip - v * (head * 0.6));
+        var g = new StreamGeometry();
+        using (var c = g.Open()) { c.BeginFigure(tip, true); c.LineTo(tip - v * head + n * (head * 0.6)); c.LineTo(tip - v * head - n * (head * 0.6)); c.EndFigure(true); }
+        ctx.DrawGeometry(SecInk, new Pen(SecHalo, 1), g);
     }
 
     PhotoInsertRef? HitPhoto(Point sp)
@@ -667,9 +776,14 @@ public class MapCanvas : Control
             case Mode.PickVar:
                 ed.ClickVar(w);
                 break;
+            case Mode.PickSection:
+                ed.ClickSection(w, Tol);
+                break;
             case Mode.EditLine:
             {
+                if (ed.HitCurveHandle(w, Tol) is { } hh) { _dragHandle = hh; e.Pointer.Capture(this); return; }
                 int kp = ed.HitKeyPoint(w, Tol);
+                if (kp >= 0 && e.ClickCount >= 2) { ed.ToggleCurve(kp); return; }
                 if (kp >= 0)
                 {
                     ed.SelectKeyPoint(kp);
@@ -684,6 +798,8 @@ public class MapCanvas : Control
             }
             case Mode.Idle:
                 if (HitPhoto(sp) is { } ph) { PhotoClicked?.Invoke(ph); return; }
+                if (ed.HitSectionEnd(w, Tol) is var se and >= 0) { _dragSecEnd = se; e.Pointer.Capture(this); return; }
+                if (ed.HitSection(w, Tol) is { } sec) { ed.SelectSection(sec); return; }
                 if (ed.HitVarHandle(w, Tol) is { } vh) { _dragVar = vh; ed.VarSel = vh.i; e.Pointer.Capture(this); ed.NotifyRedraw(); return; }
                 int cp = ed.HitCp(w, Tol);
                 if (cp >= 0)
@@ -693,6 +809,14 @@ public class MapCanvas : Control
                     return;
                 }
                 if (e.ClickCount >= 2 && ed.TryAddCp(w, Tol)) { _dragging = true; e.Pointer.Capture(this); return; }
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                { ed.PickAt(w, true); return; }
+                if (e.ClickCount >= 2)
+                {
+                    // doppio clic su un elemento: modifica della sua linea o del suo contorno; altrove: scelta di un'area
+                    if (ed.ElementAt(w) is { } hit) { ed.Select(hit); if (ed.EditableLine() != null) ed.StartEditLine(); return; }
+                    ed.PickAt(w, false); return;
+                }
                 var before = ed.Selected;
                 ed.SelectAt(w);
                 if (ed.Selected == null) { _panLast = sp; e.Pointer.Capture(this); }
@@ -720,11 +844,14 @@ public class MapCanvas : Control
         }
         if (_dragging) { ed.MoveCp(w); return; }
         if (_dragVar is { } dv) { ed.MoveVarHandle(dv.i, dv.end, w, false); InvalidateVisual(); return; }
+        if (_dragSecEnd >= 0) { ed.MoveSectionEnd(_dragSecEnd, w, Tol, false); InvalidateVisual(); return; }
         if (_dragKey >= 0) { _keyMoved = true; ed.MoveKeyPoint(_dragKey, w, Tol, false); InvalidateVisual(); return; }
+        if (_dragHandle is { } dh) { ed.MoveCurveHandle(dh.i, dh.sign, w, false); InvalidateVisual(); return; }
 
         switch (ed.Mode)
         {
             case Mode.Trace:
+            case Mode.PickSection:
                 ed.Snap = ed.FindSnap(w, Tol);
                 break;
             case Mode.EditLine:
@@ -740,7 +867,7 @@ public class MapCanvas : Control
                 else ed.HoverEdge = ed.NearestEdge(w, Tol)?.r;
                 break;
             case Mode.Idle:
-                Cursor = HitPhoto(sp) != null ? new Cursor(StandardCursorType.Hand) : ed.HitVarHandle(w, Tol) != null || ed.HitCp(w, Tol) >= 0 ? new Cursor(StandardCursorType.SizeAll) : Cursor.Default;
+                Cursor = HitPhoto(sp) != null || ed.HitSection(w, Tol) != null ? new Cursor(StandardCursorType.Hand) : ed.HitSectionEnd(w, Tol) >= 0 || ed.HitVarHandle(w, Tol) != null || ed.HitCp(w, Tol) >= 0 ? new Cursor(StandardCursorType.SizeAll) : Cursor.Default;
                 break;
         }
         InvalidateVisual();
@@ -754,8 +881,12 @@ public class MapCanvas : Control
         _dragging = false;
         if (_dragVar is { } dv && _ed != null) _ed.MoveVarHandle(dv.i, dv.end, ToWorld(e.GetPosition(this)), true);
         _dragVar = null;
+        if (_dragSecEnd >= 0 && _ed != null) _ed.MoveSectionEnd(_dragSecEnd, ToWorld(e.GetPosition(this)), Tol, true);
+        _dragSecEnd = -1;
         if (_dragKey >= 0 && _ed != null && _keyMoved) _ed.MoveKeyPoint(_dragKey, ToWorld(e.GetPosition(this)), Tol, true);
         _dragKey = -1; _keyMoved = false;
+        if (_dragHandle is { } dh && _ed != null) _ed.MoveCurveHandle(dh.i, dh.sign, ToWorld(e.GetPosition(this)), true);
+        _dragHandle = null;
         e.Pointer.Capture(null);
     }
 

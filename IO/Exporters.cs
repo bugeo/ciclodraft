@@ -57,13 +57,13 @@ public static class DxfWriter
 
         var box = BBox.Empty;
 
-        foreach (var e in p.Edges.Where(e => e.Points.Count >= 2 && (e.Owner == -1 || p.Find(e.Owner) is { Centered: true })))
+        foreach (var e in p.Edges.Where(e => e.Points.Count >= 2 && p.IsShown(e) && (e.Owner == -1 || p.Find(e.Owner) is { Centered: true })))
         {
             Poly(ents, e.Owner == -1 ? "CD_BORDI_STRADA" : "CD_INTERASSI", e.Points, false, o);
             box = box.Union(BBox.Of(e.Points));
         }
 
-        foreach (var el in p.Elements.Where(x => x.Error == null && x.Polygon.Count >= 3))
+        foreach (var el in p.Shown.Where(x => x.Error == null && x.Polygon.Count >= 3))
         {
             foreach (var dl in el.DividerLines())
                 if (dl.Count >= 2) Poly(ents, "CD_SEGNALETICA", dl, false, o);   // strisce di mezzeria
@@ -205,14 +205,14 @@ public static class CsvWriter
         var ci = CultureInfo.GetCultureInfo("it-IT");
         var sb = new StringBuilder();
         sb.AppendLine("Elemento;Tipo;Agganciato a;Lunghezza (m);Superficie (m²);Larghezza min (m);Larghezza max (m);Larghezza media (m)");
-        foreach (var e in p.Elements)
+        foreach (var e in p.Shown)
         {
             var m = e.Metrics;
             sb.AppendLine(string.Join(";", e.Name, Element.TypeLabel(e.Type), p.EdgeName(e.Base),
                 m.Length.ToString("0.00", ci), m.Area.ToString("0.00", ci), m.WMin.ToString("0.00", ci),
                 m.WMax.ToString("0.00", ci), m.WMean.ToString("0.00", ci)));
         }
-        foreach (var g in p.Elements.GroupBy(e => e.Type))
+        foreach (var g in p.Shown.GroupBy(e => e.Type))
             sb.AppendLine($"TOTALE {Element.TypeLabel(g.Key)};;;{g.Sum(e => e.Metrics.Length).ToString("0.00", ci)};{g.Sum(e => e.Metrics.Area).ToString("0.00", ci)};;;");
         File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
     }

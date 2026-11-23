@@ -23,10 +23,10 @@
         </StackPanel>
         <!-- seconda riga: tutti i comandi -->
         <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
-          <Button x:Name="OpenPhotoBtn">
+          <Button x:Name="ResetPointsBtn" ToolTip.Tip="Elimina tutti i punti di controllo e la fotocamera calcolata, e riparte dal primo punto">
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <PathIcon Data="{StaticResource IconFolderOpen}" Width="14" Height="14" />
-              <TextBlock Text="Apri foto…" VerticalAlignment="Center" />
+              <PathIcon Data="{StaticResource IconRedo}" Width="13" Height="13" />
+              <TextBlock Text="Reset" VerticalAlignment="Center" />
             </StackPanel>
           </Button>
           <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
@@ -34,14 +34,19 @@
           <ToggleButton x:Name="ModeVerify" Content="2 · Verifica" />
           <ToggleButton x:Name="ModeInsert" Content="3 · Fotoinserimento" />
           <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
-          <Button x:Name="PreviewBtn" Content="▶ Anteprima" Classes="primary" />
-          <Button x:Name="CompareBtn" Content="◐ Originale" ToolTip.Tip="Tieni premuto per vedere la foto originale" />
-          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
-          <Button x:Name="RemoveCarsBtn" Content="Rimuovi auto" ToolTip.Tip="Trova le auto che si sovrappongono ai tracciati disegnati, le cancella e ricostruisce la foto. Le altre auto restano e passano davanti al progetto." />
-          <CheckBox x:Name="CleanCheck" Content="Senza auto" IsEnabled="False" VerticalAlignment="Center" />
-          <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
-          <ToggleButton x:Name="BrushPaint" Content="Maschera: dipingi" />
-          <ToggleButton x:Name="BrushErase" Content="Gomma" />
+          <ToggleButton x:Name="DeformBtn" IsVisible="False" ToolTip.Tip="Attiva la modalità Deforma: clicca quattro vertici sulla foto, poi trascinali per deformare il progetto. Premi di nuovo per uscire.">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPencil}" Width="13" Height="13" />
+              <TextBlock Text="Deforma" VerticalAlignment="Center" />
+            </StackPanel>
+          </ToggleButton>
+          <Button x:Name="ResetWarpBtn" IsVisible="False" ToolTip.Tip="Riporta il progetto com'era prima della deformazione">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconRedo}" Width="13" Height="13" />
+              <TextBlock Text="Annulla deformazione" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <CheckBox x:Name="CleanCheck" Content="Rimuovi auto" VerticalAlignment="Center" ToolTip.Tip="Toglie dalla foto le auto che toccano i tracciati disegnati e ricostruisce lo sfondo. La prima volta il calcolo richiede circa un minuto; poi si passa subito dalla foto ripulita a quella originale." />
           <Rectangle Classes="sep" Height="24" VerticalAlignment="Center" />
           <Button x:Name="ExportBtn" Content="Esporta immagine…" Classes="primary" />
         </WrapPanel>
@@ -133,12 +138,12 @@
                   <CheckBox x:Name="BikeSymCheck" Content="Simboli bici" IsChecked="True" FontSize="12" />
                   <CheckBox x:Name="LightsCheck" Content="Lampioni" FontSize="12" />
                 </StackPanel>
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" IsVisible="False">
                   <TextBlock Classes="k" Text="Pennello (px)" VerticalAlignment="Center" />
                   <Slider x:Name="BrushSlider" Grid.Column="1" Minimum="3" Maximum="150" Value="25" />
                   <Button x:Name="ClearMaskBtn" Grid.Column="2" Content="Svuota maschera" FontSize="12" />
                 </Grid>
-                <TextBlock Classes="note" Text="La maschera indica ciò che sta davanti al progetto (auto, persone, pali, alberi): dipingila sulla foto e il progetto passerà dietro. Rotella: zoom · tasto destro: sposta · Ctrl+rotella: dimensione del pennello." />
+                <TextBlock Classes="note" Text="Sulla foto: rotella = zoom · tasto destro = sposta." />
               </StackPanel>
             </Border>
           </StackPanel>

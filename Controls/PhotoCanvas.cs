@@ -1,3 +1,4 @@
+using CicloDraft.Geometry;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -17,6 +18,51 @@ public enum BrushMode { None, Paint, Erase }
 public class PhotoCanvas : Control
 {
     public WriteableBitmap? Photo, Result, MaskBmp;
+    // trasformazione libera (passo 3): foto di base, progetto da solo e ciò che sta davanti (la foto dove c'è la maschera)
+    public WriteableBitmap? BaseBmp, LayerBmp, FrontBmp;
+    // Deformazione: una parte già fissata (WarpBase) e il poligono in corso: vertici posati (PolySrc) e spostati (PolyDst)
+    public double[]? WarpBase, PolySrc, PolyDst;
+    /// <summary>Modalità «Deforma» attiva: si vedono e si spostano i vertici del poligono.</summary>
+    public bool DeformMode;
+    /// <summary>Si stanno posando i vertici di un nuovo poligono.</summary>
+    public bool Placing;
+    public readonly List<Point> Placed = new();
+    public event Action? WarpChanged, PolygonCreated, PlacingProgress;
+    int _dragVertex = -1; bool _dragPoly; Point _dragStart; double[]? _polyStart;
+    bool FreeTransform => Mode == PhotoMode.Insert && LayerBmp != null && BaseBmp != null && !ShowOriginal;
+    bool Editing => FreeTransform && DeformMode;
+
+    /// <summary>Omografia complessiva: pixel del progetto → pixel della foto.</summary>
+    public double[] WarpMatrix
+    {
+        get
+        {
+            var m = WarpBase ?? Homography.IdentityMatrix();
+            if (PolySrc != null && PolyDst != null && Homography.QuadToQuad(PolySrc, PolyDst) is { } hp) m = Homography.Mul(hp, m);
+            return m;
+        }
+    }
+    public bool HasWarp
+    {
+        get
+        {
+            var m = WarpMatrix; var id = Homography.IdentityMatrix();
+            return m.Zip(id).Any(p => Math.Abs(p.First - p.Second) > 1e-6);
+        }
+    }
+
+    /// <summary>Inizia un nuovo poligono: la deformazione fatta fin qui resta fissata.</summary>
+    public void StartPlacing()
+    {
+        WarpBase = HasWarp ? WarpMatrix : null;
+        PolySrc = PolyDst = null;
+        Placed.Clear(); Placing = true;
+        InvalidateVisual();
+    }
+
+    public void CancelPlacing() { Placing = false; Placed.Clear(); InvalidateVisual(); }
+
+    public void ClearWarp() { WarpBase = PolySrc = PolyDst = null; Placing = false; Placed.Clear(); InvalidateVisual(); }
     public Rgba? Mask;
     public PhotoMode Mode = PhotoMode.Points;
     /// <summary>Mostra la foto originale al posto del risultato (confronto prima/dopo).</summary>
@@ -68,8 +114,9 @@ public class PhotoCanvas : Control
     public void Fit()
     {
         if (Photo == null || Bounds.Width < 10) return;
-        _s = Math.Min(Bounds.Width / Photo.PixelSize.Width, Bounds.Height / Photo.PixelSize.Height);
-        _ox = (Bounds.Width - Photo.PixelSize.Width * _s) / 2; _oy = (Bounds.Height - Photo.PixelSize.Height * _s) / 2;
+        // la foto occupa tutta la larghezza disponibile; se è più alta dello spazio, si centra e si sposta con il tasto destro
+        _s = Bounds.Width / Photo.PixelSize.Width;
+        _ox = 0; _oy = (Bounds.Height - Photo.PixelSize.Height * _s) / 2;
         _fitted = true;
         InvalidateVisual();
     }
@@ -88,10 +135,29 @@ public class PhotoCanvas : Control
             ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, Bounds.Height / 2));
             return;
         }
-        var img = Mode == PhotoMode.Insert && Result != null && !ShowOriginal ? Result : Photo;
         var dest = new Rect(_ox, _oy, Photo.PixelSize.Width * _s, Photo.PixelSize.Height * _s);
-        ctx.DrawImage(img, new Rect(0, 0, img.PixelSize.Width, img.PixelSize.Height), dest);
-        if (MaskBmp != null && (Brush != BrushMode.None || Mode == PhotoMode.Points)) ctx.DrawImage(MaskBmp, new Rect(0, 0, MaskBmp.PixelSize.Width, MaskBmp.PixelSize.Height), dest);
+        if (FreeTransform)
+        {
+            // foto, progetto deformato con l'omografia degli angoli, poi ciò che sta davanti (auto, persone)
+            int W = Photo.PixelSize.Width, H = Photo.PixelSize.Height;
+            ctx.DrawImage(BaseBmp!, new Rect(0, 0, W, H), dest);
+            var hm = WarpMatrix;
+            {
+                var hM = new Matrix(hm[0], hm[3], hm[6], hm[1], hm[4], hm[7], hm[2], hm[5], hm[8]);
+                var toScreen = new Matrix(_s, 0, 0, _s, _ox, _oy);
+                using (ctx.PushClip(dest))
+                using (ctx.PushTransform(hM * toScreen))
+                    ctx.DrawImage(LayerBmp!, new Rect(0, 0, W, H), new Rect(0, 0, W, H));
+            }
+            if (FrontBmp != null) ctx.DrawImage(FrontBmp, new Rect(0, 0, W, H), dest);
+            if (DeformMode) DrawQuadHandles(ctx);
+        }
+        else
+        {
+            var img = Mode == PhotoMode.Insert && Result != null && !ShowOriginal ? Result : Photo;
+            ctx.DrawImage(img, new Rect(0, 0, img.PixelSize.Width, img.PixelSize.Height), dest);
+        }
+        if (MaskBmp != null && Brush != BrushMode.None) ctx.DrawImage(MaskBmp, new Rect(0, 0, MaskBmp.PixelSize.Width, MaskBmp.PixelSize.Height), dest);
 
         if (Mode == PhotoMode.Verify)
             foreach (var (a, b, col, w) in Wire) ctx.DrawLine(new Pen(col, w), ToScreen(a), ToScreen(b));
@@ -126,6 +192,66 @@ public class PhotoCanvas : Control
             ctx.DrawEllipse(null, new Pen(Brushes.White, 1.5), _mouse, BrushRadius * _s, BrushRadius * _s);
             ctx.DrawEllipse(null, new Pen(Brushes.Black, 0.8), _mouse, BrushRadius * _s + 1.5, BrushRadius * _s + 1.5);
         }
+    }
+
+    static readonly IBrush HandleFill = new SolidColorBrush(Color.Parse("#FF2FCB79"));
+
+    static readonly IBrush PolyLine = new SolidColorBrush(Color.Parse("#FF2FCB79"));
+
+    void DrawQuadHandles(DrawingContext ctx)
+    {
+        Point S(double x, double y) => ToScreen(new Point(x, y));
+        var pen = new Pen(PolyLine, 2);
+        if (Placing)
+        {
+            // vertici posati finora, la linea verso il mouse e il numero del prossimo
+            for (int i = 0; i < Placed.Count; i++)
+            {
+                var a = ToScreen(Placed[i]);
+                if (i > 0) ctx.DrawLine(pen, ToScreen(Placed[i - 1]), a);
+                DrawVertex(ctx, a, i + 1, false);
+            }
+            if (Placed.Count > 0) ctx.DrawLine(new Pen(PolyLine, 1.5, new DashStyle(new double[] { 4, 3 }, 0)), ToScreen(Placed[^1]), _mouse);
+            if (Placed.Count == 3) ctx.DrawLine(new Pen(PolyLine, 1.2, new DashStyle(new double[] { 2, 3 }, 0)), _mouse, ToScreen(Placed[0]));
+            return;
+        }
+        if (PolyDst is not { } q) return;
+        var pts = Enumerable.Range(0, 4).Select(i => S(q[2 * i], q[2 * i + 1])).ToArray();
+        for (int i = 0; i < 4; i++) ctx.DrawLine(pen, pts[i], pts[(i + 1) % 4]);
+        for (int i = 0; i < 4; i++) DrawVertex(ctx, pts[i], i + 1, i == _dragVertex);
+    }
+
+    static void DrawVertex(DrawingContext ctx, Point p, int n, bool active)
+    {
+        double r = active ? 8.5 : 7;
+        ctx.DrawEllipse(active ? Brushes.White : HandleFill, new Pen(Brushes.White, 2), p, r, r);
+        var ft = new FormattedText(n.ToString(), Ci, FlowDirection.LeftToRight, new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold), 10, active ? Brushes.Black : Brushes.White);
+        ctx.DrawText(ft, p - new Vector(ft.Width / 2, ft.Height / 2));
+    }
+
+    int HitVertex(Point sp)
+    {
+        if (PolyDst is not { } q) return -1;
+        int best = -1; double bd = 14;
+        for (int i = 0; i < 4; i++)
+        {
+            var c = ToScreen(new Point(q[2 * i], q[2 * i + 1]));
+            double d = Math.Sqrt((c.X - sp.X) * (c.X - sp.X) + (c.Y - sp.Y) * (c.Y - sp.Y));
+            if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+    }
+
+    bool InsidePoly(Point photoPt)
+    {
+        if (PolyDst is not { } q) return false;
+        bool inside = false;
+        for (int i = 0, j = 3; i < 4; j = i++)
+        {
+            double xi = q[2 * i], yi = q[2 * i + 1], xj = q[2 * j], yj = q[2 * j + 1];
+            if ((yi > photoPt.Y) != (yj > photoPt.Y) && photoPt.X < (xj - xi) * (photoPt.Y - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
     }
 
     void PaintAt(Point screen)
@@ -165,6 +291,35 @@ public class PhotoCanvas : Control
             PaintAt(pt.Position); InvalidateVisual();
             return;
         }
+        if (Editing)
+        {
+            // clic fuori dal poligono: se ne inizia uno nuovo (la deformazione fatta resta)
+            if (!Placing && HitVertex(pt.Position) < 0 && !InsidePoly(ToPhoto(pt.Position))) StartPlacing();
+            if (Placing)
+            {
+                Placed.Add(ToPhoto(pt.Position));
+                if (Placed.Count == 4)
+                {
+                    var q = Homography.SortAround(Placed.SelectMany(p => new[] { p.X, p.Y }).ToArray());
+                    Placing = false; Placed.Clear();
+                    if (Homography.IsConvex(q)) { PolySrc = q; PolyDst = (double[])q.Clone(); PolygonCreated?.Invoke(); }
+                    else PlacingProgress?.Invoke();
+                }
+                else PlacingProgress?.Invoke();
+                InvalidateVisual();
+                return;
+            }
+            _dragVertex = HitVertex(pt.Position);
+            _dragPoly = _dragVertex < 0 && InsidePoly(ToPhoto(pt.Position));
+            if (_dragVertex >= 0 || _dragPoly)
+            {
+                _dragStart = ToPhoto(pt.Position); _polyStart = (double[])PolyDst!.Clone();
+                e.Pointer.Capture(this);
+            }
+            InvalidateVisual();
+            return;
+        }
+        if (FreeTransform) return;   // passo 3 fuori dalla modalità «Deforma»: il clic sinistro non fa nulla
         if (Mode is PhotoMode.Points or PhotoMode.Verify)
         {
             var p = ToPhoto(pt.Position);
@@ -181,6 +336,17 @@ public class PhotoCanvas : Control
             var d = _mouse - last; _ox += d.X; _oy += d.Y; _panLast = _mouse;
         }
         else if (_painting) PaintAt(_mouse);
+        else if (_polyStart != null && (_dragVertex >= 0 || _dragPoly))
+        {
+            var p = ToPhoto(_mouse);
+            double dx = p.X - _dragStart.X, dy = p.Y - _dragStart.Y;
+            var nq = (double[])_polyStart.Clone();
+            if (_dragPoly) for (int i = 0; i < 4; i++) { nq[2 * i] += dx; nq[2 * i + 1] += dy; }
+            else { nq[2 * _dragVertex] += dx; nq[2 * _dragVertex + 1] += dy; }
+            if (Homography.IsConvex(nq)) PolyDst = nq;   // un poligono intrecciato non è valido: il vertice si ferma
+        }
+        else if (Editing)
+            Cursor = Placing ? new Cursor(StandardCursorType.Cross) : HitVertex(_mouse) >= 0 ? new Cursor(StandardCursorType.SizeAll) : InsidePoly(ToPhoto(_mouse)) ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         InvalidateVisual();
     }
 
@@ -188,6 +354,12 @@ public class PhotoCanvas : Control
     {
         base.OnPointerReleased(e);
         if (_painting) { _painting = false; MaskChanged?.Invoke(); }
+        if (_polyStart != null && (_dragVertex >= 0 || _dragPoly))
+        {
+            _polyStart = null; _dragVertex = -1; _dragPoly = false;
+            WarpChanged?.Invoke();
+            InvalidateVisual();
+        }
         _panLast = null; e.Pointer.Capture(null);
     }
 

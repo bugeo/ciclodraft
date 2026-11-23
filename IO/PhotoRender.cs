@@ -75,7 +75,53 @@ public static class PhotoRender
         public TexMips(Tex t) { Levels.Add(t); while (Levels[^1].W > 4 && Levels[^1].H > 4) Levels.Add(Levels[^1].Half()); }
     }
 
-    public record Result(Rgba Composite, Rgba Layer);
+    /// <param name="Raw">il progetto da solo, con trasparenza, senza il taglio della maschera (per la trasformazione libera)</param>
+    public record Result(Rgba Composite, Rgba Layer, Rgba Raw);
+
+    /// <summary>
+    /// Deformazione: il progetto (Raw) viene deformato con l'omografia hm (pixel del progetto → pixel della foto),
+    /// poi tagliato dalla maschera e composto sulla foto base.
+    /// </summary>
+    public static (Rgba Composite, Rgba Layer) ApplyWarp(Rgba raw, Rgba photo, Rgba? mask, double[] hm)
+    {
+        int W = photo.W, H = photo.H;
+        var comp = new Rgba(W, H); var layer = new Rgba(W, H);
+        var inv = Homography.Invert(hm) ?? Homography.IdentityMatrix();
+        System.Threading.Tasks.Parallel.For(0, H, y =>
+        {
+            for (int x = 0; x < W; x++)
+            {
+                int i = y * W + x;
+                var (sx, sy) = Homography.Apply(inv, x + 0.5, y + 0.5);
+                sx -= 0.5; sy -= 0.5;
+                float r = 0, g = 0, b = 0, a = 0;
+                int x0 = (int)Math.Floor(sx), y0 = (int)Math.Floor(sy);
+                if (x0 >= -1 && y0 >= -1 && x0 < W && y0 < H)
+                {
+                    float fx = (float)(sx - x0), fy = (float)(sy - y0);
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int xx = x0 + (k & 1), yy = y0 + (k >> 1);
+                        if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+                        float wgt = ((k & 1) == 1 ? fx : 1 - fx) * ((k >> 1) == 1 ? fy : 1 - fy);
+                        int j = 4 * (yy * W + xx);
+                        float aa = raw.Px[j + 3] / 255f * wgt;
+                        r += raw.Px[j] * aa; g += raw.Px[j + 1] * aa; b += raw.Px[j + 2] * aa; a += aa;
+                    }
+                    if (a > 1e-5f) { r /= a; g /= a; b /= a; }
+                }
+                if (mask != null) a *= 1 - mask.Px[4 * i + 3] / 255f;
+                a = Math.Clamp(a, 0, 1);
+                byte R8 = (byte)Math.Clamp(Math.Round(r), 0, 255), G8 = (byte)Math.Clamp(Math.Round(g), 0, 255), B8v = (byte)Math.Clamp(Math.Round(b), 0, 255);
+                layer.Px[4 * i] = R8; layer.Px[4 * i + 1] = G8; layer.Px[4 * i + 2] = B8v; layer.Px[4 * i + 3] = (byte)Math.Round(a * 255);
+                comp.Px[4 * i] = (byte)Math.Round(photo.Px[4 * i] * (1 - a) + R8 * a);
+                comp.Px[4 * i + 1] = (byte)Math.Round(photo.Px[4 * i + 1] * (1 - a) + G8 * a);
+                comp.Px[4 * i + 2] = (byte)Math.Round(photo.Px[4 * i + 2] * (1 - a) + B8v * a);
+                comp.Px[4 * i + 3] = 255;
+            }
+        });
+        return (comp, layer);
+    }
 
     public static Result Render(PhotoCamera cam, Rgba photo, Rgba? mask, Project project, GpkgData? data, PhotoRenderOptions o)
     {
@@ -220,11 +266,13 @@ public static class PhotoRender
         // ── composizione ──
         var layer = new Rgba(W, H);
         var comp = new Rgba(W, H);
+        var raw = new Rgba(W, H);
         for (int i = 0; i < W * H; i++)
         {
             float a = alpha[i] * (float)o.Opacity;
-            if (mask != null) a *= 1 - mask.Px[4 * i + 3] / 255f;
             byte r = B8(layerR[i]), g = B8(layerG[i]), b = B8(layerB[i]);
+            raw.Px[4 * i] = r; raw.Px[4 * i + 1] = g; raw.Px[4 * i + 2] = b; raw.Px[4 * i + 3] = (byte)Math.Round(a * 255);
+            if (mask != null) a *= 1 - mask.Px[4 * i + 3] / 255f;
             layer.Px[4 * i] = r; layer.Px[4 * i + 1] = g; layer.Px[4 * i + 2] = b; layer.Px[4 * i + 3] = (byte)Math.Round(a * 255);
             for (int k = 0; k < 3; k++)
             {
@@ -233,7 +281,7 @@ public static class PhotoRender
             }
             comp.Px[4 * i + 3] = 255;
         }
-        return new Result(comp, layer);
+        return new Result(comp, layer, raw);
     }
 
     static byte B8(float v) => (byte)Math.Clamp(Math.Round(v * 255), 0, 255);

@@ -185,7 +185,8 @@
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="Padding" Value="6,5" />
+      <Setter Property="Padding" Value="2,5" />
+      <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
     </Style>
     <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -199,6 +200,11 @@
     </Style>
     <Style Selector="Button.tab.on:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="#FF3A414C" />
+    </Style>
+
+    <Style Selector="Grid.missing ComboBox">
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
     </Style>
 
     <!-- Elenchi nei pannelli -->

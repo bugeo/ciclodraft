@@ -78,7 +78,7 @@ public static class CarRemoval
 
         // ── 3. quali toccano il progetto ──
         NetTopologySuite.Geometries.Geometry? area = null;
-        var polys = project.Elements.Where(e => e.Polygon.Count >= 3).Select(e => Project.ToNts(e.Polygon)).Where(p => p != null && p.IsValid).Cast<NetTopologySuite.Geometries.Geometry>().ToList();
+        var polys = project.Shown.Where(e => e.Polygon.Count >= 3).Select(e => Project.ToNts(e.Polygon)).Where(p => p != null && p.IsValid).Cast<NetTopologySuite.Geometries.Geometry>().ToList();
         if (polys.Count > 0) area = NetTopologySuite.Operation.Union.CascadedPolygonUnion.Union(polys).Buffer(0.5);
         foreach (var d in dets) Collide(d, cam, area);
 

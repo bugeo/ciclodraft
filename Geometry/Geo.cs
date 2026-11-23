@@ -279,6 +279,7 @@ public readonly record struct BBox(double MinX, double MinY, double MaxX, double
     public bool IsEmpty => MinX > MaxX;
     public BBox Union(BBox o) => IsEmpty ? o : o.IsEmpty ? this :
         new(Math.Min(MinX, o.MinX), Math.Min(MinY, o.MinY), Math.Max(MaxX, o.MaxX), Math.Max(MaxY, o.MaxY));
+    public bool Intersects(BBox o) => !(o.MinX > MaxX || o.MaxX < MinX || o.MinY > MaxY || o.MaxY < MinY);
     public bool Contains(V2 p, double tol = 0) => p.X >= MinX - tol && p.X <= MaxX + tol && p.Y >= MinY - tol && p.Y <= MaxY + tol;
     public static BBox Empty => new(double.MaxValue, double.MaxValue, double.MinValue, double.MinValue);
 }

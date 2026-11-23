@@ -3,7 +3,7 @@ using CicloDraft.IO;
 
 namespace CicloDraft.Model;
 
-public enum Mode { Idle, Trace, PickBase, PickRange, SetWidth, PickOther, EditLine, PickVar }
+public enum Mode { Idle, Trace, PickBase, PickRange, SetWidth, PickOther, EditLine, PickVar, PickSection }
 
 /// <summary>Punto agganciato: su un muro/livello dei dati (Layer, Ring) oppure su una linea del progetto (Line, Key).</summary>
 public record SnapInfo(V2 P, GpkgLayer? Layer, int Ring, double RingStation, bool Vertex, Ring? Line = null, string? Key = null)
@@ -13,7 +13,7 @@ public record SnapInfo(V2 P, GpkgLayer? Layer, int Ring, double RingStation, boo
 }
 
 /// <summary>Stato e logica di interazione, indipendenti dall'interfaccia grafica.</summary>
-public class Editor
+public partial class Editor
 {
     public Project Project = new();
     public GpkgData? Data;
@@ -128,7 +128,14 @@ public class Editor
         if (edge == null) { TraceCancel(); return; }
         edge.Points = pts;
         edge.Anchors = BuildAnchors(edge.Id);
-        if (DrawingElement) { EnterWidthStep(edge); return; }
+        if (DrawingElement)
+        {
+            bool poly = DraftPolygon;
+            EnterWidthStep(edge);
+            // un poligono chiuso si salva subito (il tipo si cambia poi da «Elemento selezionato»)
+            if (poly && Mode == Mode.SetWidth && Preview is { Error: null }) Commit();
+            return;
+        }
         // linea di un elemento ridisegnata: l'elemento la segue per intero
         if (edge.Owner >= 0 && Project.Find(edge.Owner) is { } owner)
         {
@@ -188,7 +195,7 @@ public class Editor
     (Element e, int sd)? OuterHost(V2 p, int edgeId)
     {
         (Element, int)? best = null; double bd = 0.05;
-        foreach (var e in Project.Elements)
+        foreach (var e in Project.Shown)
         {
             if (e.Error != null || e.Mode != ElementMode.Offset || e.Outer.Count < 2) continue;
             foreach (int sd in e.Centered ? new[] { 1, -1 } : new[] { 1 })
@@ -221,7 +228,9 @@ public class Editor
         _editReturn = Mode;
         EditEdgeId = edge.Id; EditSel = -1; EditExtend = 0;
         Mode = Mode.EditLine;
-        Message = "Modifica la linea: trascina un punto per spostarlo, clic su un punto e Canc per eliminarlo, doppio clic sulla linea per inserirne uno, «Prosegui» per aggiungerne all'inizio o alla fine.";
+        Message = EditIsPolygon
+            ? "Modifica il poligono: trascina un punto per spostarlo, Canc per eliminarlo, doppio clic sul contorno per inserirne uno, doppio clic su un punto per farlo curvo."
+            : "Modifica la linea: trascina un punto per spostarlo, Canc per eliminarlo, doppio clic sulla linea per inserirne uno, doppio clic su un punto per farlo curvo, «Prosegui» per aggiungerne all'inizio o alla fine.";
         NotifyAll();
     }
 
@@ -255,7 +264,7 @@ public class Editor
             if (an[i].Follow && !(i + 1 < an.Count && an[i].El >= 0 && an[i + 1].El == an[i].El && an[i + 1].Sd == an[i].Sd)) an[i].Follow = false;
         var pts = new List<V2>();
         Project.UpdateLinkedEdges();
-        if (an.All(a => a.El < 0)) edge.Points = PL.Dedup(an.Select(a => new V2(a.X, a.Y)).ToList());
+        if (an.All(a => a.El < 0) && !an.Any(a => a.Curve)) edge.Points = PL.Dedup(an.Select(a => new V2(a.X, a.Y)).ToList());
         if (edge.Owner >= 0 && Project.Find(edge.Owner) is { } own) { own.Start = 0; own.End = PL.Length(edge.Points); own.ToEnd = true; }
         Project.Regenerate();
         if (_editReturn == Mode.SetWidth) { DraftStart = 0; DraftEnd = PL.Length(edge.Points); BuildPreview(); }
@@ -285,6 +294,7 @@ public class Editor
         if (!follow) return k;
         List<EdgeAnchor> Path(EdgeAnchor a, EdgeAnchor b)
         {
+            if (a.Curve || b.Curve) return new();   // accanto a un punto in curva il tratto resta curvo
             if (a.El >= 0 && b.El >= 0) return new();   // tra elementi: lo segue già l'aggancio
             var sa = FindSnap(new V2(a.X, a.Y), 0.02); var sb = FindSnap(new V2(b.X, b.Y), 0.02);
             if (sa == null || sb == null || !sa.SameLine(sb) || sa.Key != null) return new();
@@ -297,6 +307,80 @@ public class Editor
 
     public void SelectKeyPoint(int i) { EditSel = i; NotifyAll(); }
 
+    /// <summary>La linea in modifica è il contorno di un poligono (chiuso: niente inizio e fine).</summary>
+    public bool EditIsPolygon => EditEdge is { } e && (e.Owner >= 0 && Project.Find(e.Owner) is { Mode: ElementMode.Polygon } || (e.Owner == -2 && DraftPolygon));
+
+    /// <summary>Punti chiave non automatici prima e dopo i (nel poligono si gira attorno).</summary>
+    (EdgeAnchor? prev, EdgeAnchor? next) KeyNeighbours(List<EdgeAnchor> an, int i)
+    {
+        bool closed = EditIsPolygon; int n = an.Count;
+        EdgeAnchor? Walk(int d)
+        {
+            for (int k = 1; k < n; k++)
+            {
+                int j = i + d * k;
+                if (closed) j = ((j % n) + n) % n; else if (j < 0 || j >= n) return null;
+                if (!an[j].Auto) return an[j];
+            }
+            return null;
+        }
+        return (Walk(-1), Walk(1));
+    }
+
+    /// <summary>Doppio clic su un punto della linea o del poligono: diventa un punto in curva (Bézier) o torna spigolo.</summary>
+    public void ToggleCurve(int i)
+    {
+        var an = EditEdge?.Anchors; if (an == null || i < 0 || i >= an.Count || an[i].Auto) return;
+        var a = an[i];
+        if (a.Curve) { a.Curve = false; a.Hx = a.Hy = 0; }
+        else
+        {
+            var (pv, nx) = KeyNeighbours(an, i);
+            var P = new V2(a.X, a.Y);
+            var pp = pv != null ? new V2(pv.X, pv.Y) : P; var np = nx != null ? new V2(nx.X, nx.Y) : P;
+            // tangente parallela alla congiungente dei vicini, lunga un terzo del lato più corto (niente cappi)
+            var dir = (np - pp).Norm();
+            double dp = pv != null ? V2.Dist(P, pp) : double.MaxValue, dn = nx != null ? V2.Dist(P, np) : double.MaxValue;
+            double len = Math.Min(dp, dn); if (double.IsInfinity(len) || len > 1e9) len = Math.Max(V2.Dist(P, pp), V2.Dist(P, np));
+            if (dir.Len < 1e-9) dir = new V2(1, 0);
+            var h = dir * Math.Max(0.05, len / 3);
+            a.Curve = true; a.Hx = h.X; a.Hy = h.Y;
+            // i due lati del punto non seguono più muri o elementi: diventano curvi
+            i = Refollow(an, i, false);
+            a.Follow = false;
+            for (int k = i - 1; k >= 0; k--) if (!an[k].Auto) { an[k].Follow = false; break; }
+            if (EditIsPolygon && an.Count > 0) an[^1].Follow = an[^1] == a ? false : an[^1].Follow;
+        }
+        EditSel = i;
+        ApplyLineEdit();
+        Message = a.Curve ? "Punto in curva: trascina le maniglie per cambiare la curva; doppio clic per tornare allo spigolo." : "";
+        NotifyAll();
+    }
+
+    /// <summary>Maniglia di una curva sotto il punto: (indice del punto, +1 = verso il successivo, −1 = verso il precedente).</summary>
+    public (int i, int sign)? HitCurveHandle(V2 w, double tol)
+    {
+        var an = EditEdge?.Anchors; if (an == null) return null;
+        for (int i = 0; i < an.Count; i++)
+        {
+            if (!an[i].Curve) continue;
+            var P = new V2(an[i].X, an[i].Y); var H = new V2(an[i].Hx, an[i].Hy);
+            if (V2.Dist(P + H, w) < tol) return (i, 1);
+            if (V2.Dist(P - H, w) < tol) return (i, -1);
+        }
+        return null;
+    }
+
+    public void MoveCurveHandle(int i, int sign, V2 w, bool final)
+    {
+        var an = EditEdge?.Anchors; if (an == null || i < 0 || i >= an.Count) return;
+        var a = an[i]; var h = (w - new V2(a.X, a.Y)) * sign;
+        a.Hx = h.X; a.Hy = h.Y;
+        EditSel = i;
+        ApplyLineEdit();
+        if (final) NotifyAll(); else NotifyRedraw();
+    }
+
     /// <summary>Trascinamento: il punto segue il mouse (agganciandosi); al rilascio si decide l'aggancio all'elemento.</summary>
     public void MoveKeyPoint(int i, V2 w, double tol, bool final)
     {
@@ -304,6 +388,7 @@ public class Editor
         var p = FindSnap(w, tol)?.P ?? w;
         var na = final ? MakeAnchor(p, edge!.Id) : new EdgeAnchor { X = p.X, Y = p.Y };
         na.Follow = an[i].Follow && na.El >= 0;
+        na.Curve = an[i].Curve; na.Hx = an[i].Hx; na.Hy = an[i].Hy;
         an[i] = na;
         EditSel = Refollow(an, i, final && FollowOn);
         ApplyLineEdit();
@@ -406,10 +491,10 @@ public class Editor
         DraftSide = DraftCentered ? 1 : SuggestSide();
         BuildPreview();
         Message = DraftPolygon
-            ? $"Poligono di {Preview?.Metrics.Area ?? 0:0.00} m² (perimetro {Preview?.Metrics.Length ?? 0:0.00} m). Premi «Disegna» per confermarlo."
+            ? $"Poligono di {Preview?.Metrics.Area ?? 0:0.00} m² (perimetro {Preview?.Metrics.Length ?? 0:0.00} m). Premi «Prosegui» per confermarlo."
             : DraftCentered
-            ? $"Interasse di {PL.Length(edge.Points):0.00} m. Imposta la larghezza (metà per parte) e premi «Disegna»."
-            : $"Bordo di {PL.Length(edge.Points):0.00} m. Imposta la larghezza, controlla da che parte va («Inverti lato») e premi «Disegna».";
+            ? $"Interasse di {PL.Length(edge.Points):0.00} m. Imposta la larghezza (metà per parte) e premi «Prosegui»."
+            : $"Bordo di {PL.Length(edge.Points):0.00} m. Imposta la larghezza, controlla da che parte va («Inverti lato») e premi «Prosegui».";
         NotifyAll();
     }
 
@@ -483,6 +568,7 @@ public class Editor
         };
         ne.Id = Project.NextId++;
         edge.Owner = ne.Id; edge.Name = "Linea di " + ne.Name;
+        ne.Group = e.Group;
         Project.Elements.Add(ne);
         Project.Regenerate();
         Selected = ne;
@@ -555,7 +641,7 @@ public class Editor
     IEnumerable<(Ring ring, string key)> ProjectSnapLines()
     {
         int busy = Mode == Mode.Trace ? TraceEdgeId : Mode == Mode.EditLine ? EditEdgeId : -999;
-        foreach (var el in Project.Elements)
+        foreach (var el in Project.Shown)
             if (el.Error == null && el.Polygon.Count >= 3 && !(el.Base.Kind == EdgeKind.Road && el.Base.Id == busy))
                 yield return (new Ring { Pts = el.Polygon, Closed = true, Box = BBox.Of(el.Polygon) }, "el:" + el.Id);
         foreach (var e in Project.Edges)
@@ -635,9 +721,9 @@ public class Editor
     public IEnumerable<(EdgeRef r, List<V2> pts)> PickableEdges()
     {
         foreach (var e in Project.Edges)
-            if (e.Points.Count >= 2 && e.Owner != -2 && !(e.Owner >= 0 && Project.Find(e.Owner) is { Centered: true }))
+            if (e.Points.Count >= 2 && e.Owner != -2 && Project.IsShown(e) && !(e.Owner >= 0 && Project.Find(e.Owner) is { Centered: true }))
                 yield return (new EdgeRef(EdgeKind.Road, e.Id), e.Points);
-        foreach (var el in Project.Elements)
+        foreach (var el in Project.Shown)
             if (el.Error == null && el.Mode is ElementMode.Offset or ElementMode.Polygon && el.Outer.Count >= 2)
             {
                 yield return (new EdgeRef(EdgeKind.Outer, el.Id), el.Outer);
@@ -723,7 +809,7 @@ public class Editor
                 {
                     DraftOther = hit.Value.r;
                     BuildPreview();
-                    Message = Preview?.Error ?? $"Anteprima tra {Project.EdgeName(DraftBase!.Value)} e {Project.EdgeName(DraftOther.Value)}. Premi «Disegna».";
+                    Message = Preview?.Error ?? $"Anteprima tra {Project.EdgeName(DraftBase!.Value)} e {Project.EdgeName(DraftOther.Value)}. Premi «Prosegui».";
                     NotifyAll();
                 }
                 break;
@@ -777,7 +863,7 @@ public class Editor
             Mode = Mode.SetWidth;
             DraftSide = SuggestSide();
             BuildPreview();
-            Message = "Imposta la larghezza e controlla l'anteprima. «Inverti lato» se l'elemento va dall'altra parte. Poi «Disegna».";
+            Message = "Imposta la larghezza e controlla l'anteprima. «Inverti lato» se l'elemento va dall'altra parte. Poi «Prosegui».";
         }
         else
         {
@@ -837,6 +923,7 @@ public class Editor
         var e = Preview;
         e.Id = Project.NextId++;
         if (e.Base.Kind == EdgeKind.Road && Project.FindEdge(e.Base.Id) is { Owner: -2 } own) { own.Owner = e.Id; own.Name = "Linea di " + e.Name; }
+        Adopt(e);
         Project.Elements.Add(e);
         Project.Regenerate();
         Selected = e; Preview = null; DraftBase = null; DraftOther = null;
@@ -847,6 +934,8 @@ public class Editor
 
     public void CancelDraft(bool notify = true)
     {
+        if (Mode == Mode.PickSection) { Mode = Mode.Idle; SectionA = null; Message = "Sezione annullata."; }
+        ClearPick();
         if (Mode == Mode.PickVar) { Mode = Mode.Idle; VarStart = null; Message = "Variatore annullato."; }
         if (Mode is Mode.PickBase or Mode.PickRange or Mode.SetWidth or Mode.PickOther)
         {
@@ -861,7 +950,7 @@ public class Editor
     bool Blocked(V2 q)
     {
         if (Data?.InsideBuilding(q) == true) return true;
-        foreach (var e in Project.Elements)
+        foreach (var e in Project.Shown)
             if (e.Polygon.Count >= 3 && PL.PointInRing(e.Polygon, q)) return true;
         return false;
     }
@@ -899,18 +988,18 @@ public class Editor
 
     public void SelectAt(V2 w)
     {
-        Selected = null;
-        for (int i = Project.Elements.Count - 1; i >= 0; i--)
-        {
-            var e = Project.Elements[i];
-            if (e.Polygon.Count >= 3 && PL.PointInRing(e.Polygon, w)) { Selected = e; break; }
-        }
+        // tra gli elementi sotto il clic vince il più piccolo (come sulla mappa, dove sta sopra): un parcheggio dentro la carreggiata
+        Selected = ElementAt(w);
+        ClearPick();
+        if (Selected != null) SelectedSection = null;
         NotifyAll();
     }
 
     public void Select(Element? e)
     {
         if (!ReferenceEquals(e, Selected)) { VarSel = -1; if (Mode == Mode.PickVar) { Mode = Mode.Idle; VarStart = null; } }
+        if (e != null) SelectedSection = null;
+        ClearPick();
         Selected = e; NotifyAll();
     }
 
@@ -1015,6 +1104,14 @@ public class Editor
         if (Selected is not { Type: ElementType.Parcheggio } e) return;
         e.StallLines = on; e.StallLength = Math.Clamp(Math.Round(length, 2), 0.5, 50);
         Project.Regenerate();
+        Message = "";
+        NotifyAll();
+    }
+
+    public void SetSelectedHeight(double h)
+    {
+        if (Selected is not { HasHeight: true } e) return;
+        e.Height = Math.Clamp(Math.Round(h, 2), 0, 2);
         Message = "";
         NotifyAll();
     }
@@ -1171,6 +1268,148 @@ public class Editor
         e.Start = Math.Clamp(Math.Min(from, to), 0, L); e.End = Math.Clamp(Math.Max(from, to), 0, L);
         e.ToEnd = e.End >= L - 0.01;
         Project.Regenerate(); NotifyAll();
+    }
+
+    // ───────────────────────── Sezioni ─────────────────────────
+
+    /// <summary>Sezione aperta (si vede il disegno in sezione e si possono trascinare A e B).</summary>
+    public CrossSection? SelectedSection;
+    /// <summary>Mentre si traccia una sezione: il punto A già cliccato.</summary>
+    public V2? SectionA;
+
+    public void StartSection()
+    {
+        if (Data == null) return;
+        if (Mode == Mode.Trace) TraceCancel(); else if (Mode != Mode.Idle) CancelDraft(false);
+        Selected = null; SelectedSection = null; SectionA = null;
+        Mode = Mode.PickSection;
+        Message = "Nuova sezione: clic sul punto A (da un lato della strada), poi sul punto B (dall'altro lato). Esc annulla.";
+        NotifyAll();
+    }
+
+    public void ClickSection(V2 w, double tol)
+    {
+        if (Mode != Mode.PickSection) return;
+        var p = FindSnap(w, tol)?.P ?? w;
+        if (SectionA is not { } a) { SectionA = p; Message = "Ora clic sul punto B, dall'altra parte della strada."; NotifyAll(); return; }
+        if (V2.Dist(a, p) < 0.5) { Message = "A e B sono troppo vicini: clic più lontano."; NotifyAll(); return; }
+        int n = 1; while (Project.Sections.Any(s => s.Name == $"Sezione {n}")) n++;
+        var sec = new CrossSection { Id = Project.NextId++, Name = $"Sezione {n}", A = a, B = p };
+        Project.Sections.Add(sec);
+        Mode = Mode.Idle; SectionA = null; Selected = null; SelectedSection = sec;
+        var r = SectionCalc.Compute(sec, Project, Data);
+        Message = $"{sec.Name}: {r.Pieces.Count} tratti di elementi, larghezza complessiva {r.ElementsWidth:0.00} m. «Inverti verso» cambia il lato da cui la guardi.";
+        NotifyAll();
+    }
+
+    public void SelectSection(CrossSection? s) { SelectedSection = s; if (s != null) Selected = null; NotifyAll(); }
+
+    public void FlipSection()
+    {
+        if (SelectedSection is not { } s) return;
+        s.Flip = !s.Flip; Message = $"{s.Name}: ora la guardi dall'altro lato."; NotifyAll();
+    }
+
+    public void DeleteSection(CrossSection s)
+    {
+        Project.Sections.Remove(s);
+        if (SelectedSection == s) SelectedSection = null;
+        Message = $"{s.Name} eliminata."; NotifyAll();
+    }
+
+    /// <summary>Sezione la cui linea passa vicino a w.</summary>
+    public CrossSection? HitSection(V2 w, double tol) =>
+        Project.Sections.Select(s => (s, d: PL.Project(new List<V2> { s.A, s.B }, w).Distance)).Where(x => x.d < tol).OrderBy(x => x.d).Select(x => x.s).FirstOrDefault();
+
+    /// <summary>Estremo (A = 0, B = 1) della sezione aperta vicino a w.</summary>
+    public int HitSectionEnd(V2 w, double tol)
+    {
+        if (SelectedSection is not { } s) return -1;
+        double da = V2.Dist(s.A, w), db = V2.Dist(s.B, w);
+        if (Math.Min(da, db) > tol * 1.3) return -1;
+        return da <= db ? 0 : 1;
+    }
+
+    public void MoveSectionEnd(int end, V2 w, double tol, bool final)
+    {
+        if (SelectedSection is not { } s) return;
+        var p = FindSnap(w, tol)?.P ?? w;
+        var other = end == 0 ? s.B : s.A;
+        if (V2.Dist(p, other) < 0.5) return;
+        if (end == 0) s.A = p; else s.B = p;
+        if (final) { Message = $"{s.Name}: {s.Length:0.00} m."; NotifyAll(); } else NotifyRedraw();
+    }
+
+    // ───────────────────────── Conversione in poligono ─────────────────────────
+
+    /// <summary>Si può convertire l'elemento selezionato in poligono? null = sì, altrimenti il motivo.</summary>
+    public string? PolygonConversionBlocker()
+    {
+        if (Selected is not { } e) return "Nessun elemento selezionato.";
+        if (e.Mode == ElementMode.Polygon) return $"{e.Name} è già un poligono.";
+        if (e.Error != null || e.Polygon.Count < 3) return $"{e.Name} ha un errore e non ha una forma da convertire.";
+        var deps = Project.Elements.Where(x => x != e && Project.DependsOn(x, e.Id) && (x.Base.Kind != EdgeKind.Road || x.Other is { Kind: not EdgeKind.Road })).ToList();
+        if (deps.Count > 0) return $"Non posso convertire {e.Name}: {string.Join(", ", deps.Select(d => d.Name))} {(deps.Count == 1 ? "è riempito" : "sono riempiti")} usando i suoi lati. Elimina prima {(deps.Count == 1 ? "quell'elemento" : "quegli elementi")}.";
+        return null;
+    }
+
+    /// <summary>Elementi le cui linee sono agganciate al contorno dell'elemento selezionato (dopo la conversione non lo seguiranno più).</summary>
+    public List<Element> LinkedToSelected()
+    {
+        if (Selected is not { } e) return new();
+        var ids = Project.Edges.Where(ed => ed.Anchors?.Any(a => a.El == e.Id) == true && ed.Owner != e.Id).Select(ed => ed.Owner).ToHashSet();
+        return Project.Elements.Where(x => ids.Contains(x.Id)).ToList();
+    }
+
+    /// <summary>
+    /// Converte l'elemento tracciato selezionato in poligono: il contorno attuale diventa il poligono (non si torna indietro).
+    /// Larghezza, variatori, strisce e lato non valgono più; restano tipo, nome e superficie.
+    /// </summary>
+    public void ConvertSelectedToPolygon()
+    {
+        if (PolygonConversionBlocker() is { } why) { Message = why; NotifyAll(); return; }
+        var e = Selected!;
+        double areaBefore = e.Metrics.Area;
+        // contorno attuale, chiuso implicitamente; i vertici quasi allineati (sotto il centimetro) si tolgono
+        var ring = CleanRing(e.Polygon);
+        FreezeLinksTo(e.Id);
+        // la linea dell'elemento diventa il contorno del poligono
+        MakePolygon(e, ring);
+        VarSel = -1;
+        Project.Regenerate();
+        Message = $"{e.Name} è ora un poligono di {e.Polygon.Count} vertici ({e.Metrics.Area:0.00} m², prima {areaBefore:0.00} m²). Puoi spostarne i vertici con «Modifica la linea».";
+        NotifyAll();
+    }
+
+    /// <summary>Le linee agganciate al contorno dell'elemento restano dove sono: si congelano com'è ora, compreso il tratto che seguiva il contorno.</summary>
+    void FreezeLinksTo(int elId)
+    {
+        foreach (var ed in Project.Edges)
+        {
+            if (ed.Anchors is not { } an || !an.Any(x => x.El == elId) || ed.Points.Count < 2) continue;
+            var keys = an.Where(x => !x.Auto).ToList();
+            var frozen = new List<EdgeAnchor>();
+            foreach (var p in ed.Points)
+            {
+                // i vertici che coincidono con un punto chiave restano punti chiave (agganciati ad altri elementi, se lo erano)
+                var k = keys.FirstOrDefault(x => V2.Dist(new V2(x.X, x.Y), p) < 0.01);
+                if (k != null && !frozen.Contains(k)) { if (k.El == elId) { k.El = -1; } k.Follow = false; frozen.Add(k); }
+                else frozen.Add(new EdgeAnchor { X = p.X, Y = p.Y, Auto = true });
+            }
+            ed.Anchors = frozen;
+        }
+    }
+
+    /// <summary>Rende l'elemento un poligono con il contorno dato (la sua linea diventa il contorno).</summary>
+    void MakePolygon(Element e, List<V2> ring)
+    {
+        var closed = new List<V2>(ring) { ring[0] };
+        var own = e.Base.Kind == EdgeKind.Road && Project.FindEdge(e.Base.Id) is { } be && be.Owner == e.Id ? be : null;
+        if (own == null) { own = Project.AddEdge("Linea di " + e.Name); own.Owner = e.Id; }
+        own.Points = ring; own.Anchors = null;
+        e.Mode = ElementMode.Polygon; e.Base = new EdgeRef(EdgeKind.Road, own.Id); e.Other = null;
+        e.Centered = false; e.Profile.Clear(); e.Variators.Clear(); e.Dividers = -1;
+        e.Start = 0; e.End = PL.Length(closed); e.ToEnd = true; e.Side = 1;
     }
 
     public void DeleteSelected()

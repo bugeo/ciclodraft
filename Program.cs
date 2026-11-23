@@ -7,6 +7,8 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // server MCP su stdin/stdout, senza interfaccia grafica
+        if (args.Length > 0 && args[0] == "--mcp") return CicloDraft.IO.McpServer.Run();
         if (args.Length > 0 && args[0] == "--photo-test") return SelfTest.RunPhoto(args.Skip(1).ToArray());
         if (args.Length > 0 && args[0] == "--project-polys")
         {

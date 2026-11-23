@@ -40,19 +40,9 @@ public partial class PhotoView : UserControl
         PairsList.ItemsSource = _rows;
         PickMap.Data = _ed?.Data; PickMap.Project = _ed?.Project;
 
-        OpenPhotoBtn.Click += async (_, _) => await OpenPhotoDialog();
         ModePoints.Click += (_, _) => SetMode(PhotoMode.Points);
         ModeVerify.Click += (_, _) => SetMode(PhotoMode.Verify);
         ModeInsert.Click += (_, _) => SetMode(PhotoMode.Insert);
-        PreviewBtn.Click += (_, _) =>
-        {
-            if (_cam == null) { Status("Per l'anteprima serve la fotocamera: inserisci almeno 4 punti di controllo."); return; }
-            SetMode(PhotoMode.Insert);
-            _ = RenderNow();
-        };
-        CompareBtn.AddHandler(PointerPressedEvent, (_, _) => { Photo.ShowOriginal = true; Photo.InvalidateVisual(); }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        CompareBtn.AddHandler(PointerReleasedEvent, (_, _) => { Photo.ShowOriginal = false; Photo.InvalidateVisual(); }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        CompareBtn.PointerCaptureLost += (_, _) => { Photo.ShowOriginal = false; Photo.InvalidateVisual(); };
         RotLeftBtn.Click += (_, _) => PickMap.RotateBy(15);
         RotRightBtn.Click += (_, _) => PickMap.RotateBy(-15);
         RotNorthBtn.Click += (_, _) => PickMap.SetRotation(0);
@@ -62,8 +52,6 @@ public partial class PhotoView : UserControl
             PickMap.SetRotation(90 - _cam.Yaw); // la direzione di vista della foto verso l'alto
         };
         ShowProjectCheck.IsCheckedChanged += (_, _) => { PickMap.ShowProject = ShowProjectCheck.IsChecked == true; PickMap.InvalidateVisual(); };
-        BrushPaint.Click += (_, _) => SetBrush(BrushPaint.IsChecked == true ? BrushMode.Paint : BrushMode.None);
-        BrushErase.Click += (_, _) => SetBrush(BrushErase.IsChecked == true ? BrushMode.Erase : BrushMode.None);
         BrushSlider.ValueChanged += (_, _) => { Photo.BrushRadius = BrushSlider.Value; Photo.InvalidateVisual(); };
         ClearMaskBtn.Click += (_, _) =>
         {
@@ -71,8 +59,18 @@ public partial class PhotoView : UserControl
             Array.Clear(_mask.Px); Photo.RefreshMaskBitmap(); Photo.InvalidateVisual(); SaveSidecar(); ScheduleRender();
         };
         ExportBtn.Click += async (_, _) => await Export();
-        RemoveCarsBtn.Click += async (_, _) => await RemoveCars();
-        CleanCheck.IsCheckedChanged += (_, _) => { if (!_updating) ScheduleRender(0); };
+        // «Rimuovi auto»: la prima volta calcola la foto senza auto, poi passa solo dalla foto ripulita all'originale
+        CleanCheck.IsCheckedChanged += async (_, _) =>
+        {
+            if (_updating) return;
+            if (CleanCheck.IsChecked == true && _clean == null)
+            {
+                if (!await RemoveCars()) { _updating = true; CleanCheck.IsChecked = false; _updating = false; }
+                return;
+            }
+            if (CleanCheck.IsChecked == true && _cam != null && Photo.Mode != PhotoMode.Insert) SetMode(PhotoMode.Insert);
+            else ScheduleRender(0);
+        };
         foreach (var s in new[] { ExposureSlider, ShadowSlider, OpacitySlider }) s.ValueChanged += (_, _) => { UpdateSliderTexts(); ScheduleRender(); };
         foreach (var c in new[] { MarkingsCheck, BikeSymCheck, LightsCheck }) c.IsCheckedChanged += (_, _) => ScheduleRender();
         HeightHintCombo.SelectionChanged += (_, _) => { if (!_updating) { _file.CameraHeightHint = HeightHint; Solve(); } };
@@ -112,14 +110,40 @@ public partial class PhotoView : UserControl
 
         KeyDown += (_, e) =>
         {
+            if (e.Key == Key.Escape && Photo.DeformMode) { SetDeform(false); return; }
             if (e.Key == Key.Escape) { _pendingPhoto = null; Photo.Pending = null; PickMap.AwaitingPick = false; SetBrush(BrushMode.None); Photo.InvalidateVisual(); PickMap.InvalidateVisual(); }
             if (e.Key == Key.Delete && _sel != null && TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not NumericUpDown) { _file.Pairs.Remove(_sel); _sel = null; SaveSidecar(); Solve(); }
         };
         CloseViewBtn.Click += (_, _) => CloseRequested?.Invoke();
+        ResetPointsBtn.Click += async (_, _) => await ResetPoints();
+        ResetWarpBtn.Click += (_, _) =>
+        {
+            Photo.ClearWarp(); StoreWarp();
+            Status("Deformazione annullata: il progetto è di nuovo come lo calcola la fotocamera.");
+        };
+        // «Deforma»: quattro clic posano i vertici del poligono, poi trascinandoli si deforma il progetto
+        DeformBtn.Click += (_, _) => SetDeform(DeformBtn.IsChecked == true);
+        Photo.PlacingProgress += () =>
+        {
+            int n = Photo.Placed.Count;
+            Status(Photo.Placing
+                ? $"Deforma: clic sul {n + 1}° vertice ({n} di 4)."
+                : "I quattro vertici formavano un poligono non valido: clicca di nuovo quattro vertici girando attorno all'area.");
+        };
+        Photo.PolygonCreated += () =>
+        {
+            StoreWarp();
+            Status("Poligono creato: trascina i suoi vertici per deformare il progetto e farlo combaciare con la foto (trascina dentro per spostarlo tutto).");
+        };
+        Photo.WarpChanged += () =>
+        {
+            StoreWarp();
+            Status("Deformazione salvata. Clic fuori dal poligono per aggiungerne un altro; premi «Deforma» per uscire.");
+        };
         AttachedToVisualTree += (_, _) =>
         {
-            if (_ed?.Data != null) PickMap.ZoomTo(_ed.Project.Elements.Count > 0
-                ? _ed.Project.Elements.Where(e => e.Polygon.Count > 0).Select(e => BBox.Of(e.Polygon)).Aggregate((a, b) => a.Union(b))
+            if (_ed?.Data != null) PickMap.ZoomTo(_ed.Project.Shown.Any()
+                ? _ed.Project.Shown.Where(e => e.Polygon.Count > 0).Select(e => BBox.Of(e.Polygon)).Aggregate((a, b) => a.Union(b))
                 : _ed.Extent());
             UpdateSliderTexts();
         };
@@ -166,11 +190,15 @@ public partial class PhotoView : UserControl
             _file.Photo = Path.GetFileName(path);
             _updating = true;
             HeightHintCombo.SelectedIndex = _file.CameraHeightHint >= 5 ? 2 : _file.CameraHeightHint >= 2.2 ? 1 : 0;
-            CleanCheck.IsEnabled = _clean != null; CleanCheck.IsChecked = _clean != null;
+            CleanCheck.IsEnabled = true; CleanCheck.IsChecked = false;   // all'apertura si vede la foto originale
             _updating = false;
             Photo.Photo = PhotoCanvas.ToBitmap(_photo);
             Photo.Mask = _mask; Photo.RefreshMaskBitmap();
             Photo.Result = null; _cam = null;
+            Photo.LayerBmp = Photo.BaseBmp = Photo.FrontBmp = null;
+            Photo.ClearWarp();
+            Photo.WarpBase = _file.WarpBase is { Length: 9 } wb ? wb : _file.Warp is { Length: 8 } wq ? Homography.RectToQuad(_photo.W, _photo.H, wq) : null;
+            if (_file.WarpSrc is { Length: 8 } ws && _file.WarpDst is { Length: 8 } wd) { Photo.PolySrc = ws; Photo.PolyDst = wd; }
             Photo.Fit();
             TitleText.Text = Path.GetFileName(path);
             Status($"Foto {Path.GetFileName(path)} ({_photo.W} × {_photo.H} px)." + (_file.Pairs.Count > 0 ? $" Ripresi {_file.Pairs.Count} punti salvati." : " Clicca un punto riconoscibile sulla foto."));
@@ -353,7 +381,7 @@ public partial class PhotoView : UserControl
                     for (int i = 0; i + 1 < c.Length; i++) Seg(new V2(c[i].X, c[i].Y), new V2(c[i + 1].X, c[i + 1].Y), lp.Height, yellow, 1);
                 }
         }
-        foreach (var e in _ed.Project.Elements.Where(e => e.Polygon.Count >= 3))
+        foreach (var e in _ed.Project.Shown.Where(e => e.Polygon.Count >= 3))
             for (int i = 0; i < e.Polygon.Count; i++) Seg(e.Polygon[i], e.Polygon[(i + 1) % e.Polygon.Count], 0.02, blue, 2);
     }
 
@@ -363,6 +391,8 @@ public partial class PhotoView : UserControl
     {
         Photo.Mode = m;
         ModePoints.IsChecked = m == PhotoMode.Points; ModeVerify.IsChecked = m == PhotoMode.Verify; ModeInsert.IsChecked = m == PhotoMode.Insert;
+        ResetWarpBtn.IsVisible = DeformBtn.IsVisible = m == PhotoMode.Insert;
+        if (m != PhotoMode.Insert && Photo.DeformMode) SetDeform(false);
         if (m == PhotoMode.Insert)
         {
             if (_cam == null) Status("Prima calcola la fotocamera con almeno 4 punti di controllo.");
@@ -376,7 +406,6 @@ public partial class PhotoView : UserControl
     void SetBrush(BrushMode b)
     {
         Photo.Brush = b;
-        BrushPaint.IsChecked = b == BrushMode.Paint; BrushErase.IsChecked = b == BrushMode.Erase;
         if (b != BrushMode.None) Status("Dipingi sulla foto ciò che deve restare davanti al progetto (auto, persone, pali). Ctrl+rotella cambia la dimensione del pennello.");
         Photo.InvalidateVisual();
     }
@@ -405,9 +434,13 @@ public partial class PhotoView : UserControl
         {
             var cam = _cam; var photo = CleanCheck.IsChecked == true && _clean != null ? _clean : _photo; var mask = _mask; var o = RenderOptions();
             var res = await Task.Run(() => PhotoRender.Render(cam, photo, mask, _ed.Project, _ed.Data, o));
+            var front = await Task.Run(() => FrontOf(photo, mask));
             Photo.Result = PhotoCanvas.ToBitmap(res.Composite);
+            Photo.LayerBmp = PhotoCanvas.ToBitmap(res.Raw);
+            Photo.BaseBmp = PhotoCanvas.ToBitmap(photo);
+            Photo.FrontBmp = front != null ? PhotoCanvas.ToBitmap(front) : null;
             Photo.InvalidateVisual();
-            Status("Fotoinserimento pronto. Dipingi la maschera su ciò che deve stare davanti, regola luminosità e ombre, poi «Esporta immagine».");
+            Status("Fotoinserimento pronto. Se non combacia, premi «Deforma», clicca quattro vertici sulla foto e trascinali per deformare il progetto; poi «Esporta immagine».");
             return res;
         }
         catch (Exception ex) { Status("Disegno non riuscito: " + ex.Message); return null; }
@@ -435,11 +468,15 @@ public partial class PhotoView : UserControl
     {
         while (_rendering) await Task.Delay(50);   // si aspetta un eventuale disegno in corso
         var res = await RenderNow();
-        if (res == null) return;
+        if (res == null || _photo == null) return;
+        var basePhoto = CleanCheck.IsChecked == true && _clean != null ? _clean : _photo;
+        var warp = Photo.HasWarp ? Photo.WarpMatrix : null; var mask = _mask;
         await Task.Run(() =>
         {
-            res.Composite.SavePng(path);
-            res.Layer.SavePng(Path.ChangeExtension(path, null) + "_livello.png");
+            Rgba comp = res.Composite, layer = res.Layer;
+            if (warp != null) (comp, layer) = PhotoRender.ApplyWarp(res.Raw, basePhoto, mask, warp);
+            comp.SavePng(path);
+            layer.SavePng(Path.ChangeExtension(path, null) + "_livello.png");
         });
         SaveSidecar();
         Status($"Esportati {Path.GetFileName(path)} e {Path.GetFileNameWithoutExtension(path)}_livello.png (solo il progetto, con trasparenza, per il fotoritocco).");
@@ -447,24 +484,24 @@ public partial class PhotoView : UserControl
 
     // ───────────── rimozione delle auto ─────────────
 
-    public async Task RemoveCars()
+    public async Task<bool> RemoveCars()
     {
-        if (_removing) return;
-        if (_cam == null || _photo == null || _photoPath == null || _ed == null) { Status("Per riconoscere le auto sul progetto serve la fotocamera: inserisci prima i punti di controllo."); return; }
-        if (!_ed.Project.Elements.Any(e => e.Polygon.Count >= 3)) { Status("Nel progetto non ci sono ancora elementi disegnati: nessuna auto da togliere."); return; }
+        if (_removing) return false;
+        if (_cam == null || _photo == null || _photoPath == null || _ed == null) { Status("Per riconoscere le auto sul progetto serve la fotocamera: inserisci prima i punti di controllo."); return false; }
+        if (!_ed.Project.Shown.Any(e => e.Polygon.Count >= 3)) { Status("Nel progetto non ci sono ancora elementi disegnati: nessuna auto da togliere."); return false; }
         var dir = CarRemoval.FindModels();
         if (dir == null)
         {
             Status($"Mancano i modelli per riconoscere le auto: copia la cartella «modelli» ({CarRemoval.YoloFile}, {CarRemoval.SamEncFile}, {CarRemoval.SamDecFile}, {CarRemoval.LamaFile}) accanto a CicloDraft.exe.");
-            return;
+            return false;
         }
-        _removing = true; RemoveCarsBtn.IsEnabled = false;
+        _removing = true; CleanCheck.IsEnabled = false;
         try
         {
             var cam = _cam; var photo = _photo; var project = _ed.Project;
             var prog = new Progress<string>(m => Status(m + " (la prima volta può richiedere circa un minuto)"));
             var r = await Task.Run(() => CarRemoval.Run(photo, cam, project, dir, prog));
-            if (_photo != photo) return;   // nel frattempo è stata aperta un'altra foto
+            if (_photo != photo) return false;   // nel frattempo è stata aperta un'altra foto
             _clean = r.Clean;
             // le auto rimaste e le persone passano davanti al progetto; dove le auto sono state tolte la maschera si svuota
             _mask ??= new Rgba(photo.W, photo.H);
@@ -483,10 +520,11 @@ public partial class PhotoView : UserControl
             Status(nRem == 0
                 ? $"Nessuna auto tocca i tracciati del progetto. {nKeep} oggetti (auto, persone) sono stati aggiunti alla maschera e passano davanti al progetto."
                 : $"Tolte {nRem} auto che toccavano il progetto e ricostruita la foto ({r.Time.TotalSeconds:0} s). Altri {nKeep} oggetti restano e passano davanti al progetto (maschera). " +
-                  "«Senza auto» confronta con la foto originale; con la maschera e la gomma si correggono i dettagli.");
+                  "Togli il segno a «Rimuovi auto» per rivedere la foto originale.");
+            return true;
         }
-        catch (Exception ex) { Status("Rimozione delle auto non riuscita: " + ex.Message); }
-        finally { _removing = false; RemoveCarsBtn.IsEnabled = true; }
+        catch (Exception ex) { Status("Rimozione delle auto non riuscita: " + ex.Message); return false; }
+        finally { _removing = false; CleanCheck.IsEnabled = true; }
     }
 
     // per le prove automatiche
@@ -500,4 +538,105 @@ public partial class PhotoView : UserControl
     public PhotoCamera? Camera => _cam;
     public PhotoCanvas PhotoCanvasView => Photo;
     public void SetModeForTest(PhotoMode m) => SetMode(m);
+
+    /// <summary>«Reset»: dopo conferma toglie tutti i punti di controllo e la fotocamera e torna al passo 1 · Punti.</summary>
+    async Task ResetPoints()
+    {
+        if (_photo == null) { Status("Apri prima una foto."); return; }
+        int n = _file.Pairs.Count;
+        if (n == 0 && _cam == null) { SetMode(PhotoMode.Points); Status("Non ci sono punti da eliminare: clicca un punto riconoscibile sulla foto."); return; }
+        if (TopLevel.GetTopLevel(this) is not Window owner || !await Confirm(owner, "Ricominciare da capo?",
+                (n == 1 ? "Viene eliminato il punto di controllo" : $"Vengono eliminati tutti i punti di controllo ({n})") + " e la fotocamera calcolata. La maschera e la foto senza auto restano.", "Elimina i punti"))
+            return;
+        _solveCts?.Cancel();
+        _file.Pairs.Clear(); _sel = null; _cam = null;
+        Photo.ClearWarp(); _file.Warp = _file.WarpBase = _file.WarpSrc = _file.WarpDst = null; Photo.LayerBmp = Photo.BaseBmp = Photo.FrontBmp = null;
+        _pendingPhoto = null; Photo.Pending = null; PickMap.AwaitingPick = false;
+        Photo.Result = null;
+        SetMode(PhotoMode.Points);
+        SaveSidecar();
+        Solve();
+        Photo.InvalidateVisual(); PickMap.InvalidateVisual();
+        Status($"Punti eliminati ({n}). Ricomincia: clicca un punto riconoscibile sulla foto, poi lo stesso punto sulla mappa.");
+    }
+
+    static async Task<bool> Confirm(Window owner, string title, string text, string okText)
+    {
+        bool ok = false;
+        var dlg = new Window { Title = title, SizeToContent = SizeToContent.WidthAndHeight, CanResize = false, WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false };
+        var yes = new Button { Content = okText, Classes = { "primary" }, MinWidth = 110, HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center };
+        var no = new Button { Content = "Annulla", MinWidth = 96, HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center, IsCancel = true, IsDefault = true };
+        yes.Click += (_, _) => { ok = true; dlg.Close(); };
+        no.Click += (_, _) => dlg.Close();
+        dlg.Content = new Border
+        {
+            Padding = new Avalonia.Thickness(24, 20), MaxWidth = 460,
+            Child = new StackPanel
+            {
+                Spacing = 14,
+                Children =
+                {
+                    new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeight.SemiBold },
+                    new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap },
+                    new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Margin = new Avalonia.Thickness(0, 6, 0, 0), Children = { no, yes } }
+                }
+            }
+        };
+        await dlg.ShowDialog(owner);
+        return ok;
+    }
+
+
+    /// <summary>Ciò che sta davanti al progetto: la foto dove c'è la maschera (auto, persone), trasparente altrove.</summary>
+    static Rgba? FrontOf(Rgba photo, Rgba? mask)
+    {
+        if (mask == null || mask.W != photo.W || mask.H != photo.H) return null;
+        var f = new Rgba(photo.W, photo.H); bool any = false;
+        for (int i = 0; i < photo.W * photo.H; i++)
+        {
+            byte a = mask.Px[4 * i + 3];
+            if (a == 0) continue;
+            any = true;
+            f.Px[4 * i] = photo.Px[4 * i]; f.Px[4 * i + 1] = photo.Px[4 * i + 1]; f.Px[4 * i + 2] = photo.Px[4 * i + 2]; f.Px[4 * i + 3] = a;
+        }
+        return any ? f : null;
+    }
+
+
+    /// <summary>La deformazione (parte fissata e poligono) si salva con il fotoinserimento.</summary>
+    void StoreWarp()
+    {
+        _file.Warp = null;
+        _file.WarpBase = Photo.WarpBase;
+        _file.WarpSrc = Photo.PolySrc; _file.WarpDst = Photo.PolyDst;
+        if (!Photo.HasWarp && Photo.PolySrc == null) _file.WarpBase = null;
+        SaveSidecar();
+        Photo.InvalidateVisual();
+    }
+
+
+    /// <summary>Entra o esce dalla modalità «Deforma» (il pulsante resta verde finché è attiva).</summary>
+    void SetDeform(bool on)
+    {
+        if (on && Photo.LayerBmp == null)
+        {
+            on = false;
+            Status("Aspetta che il progetto sia disegnato sulla foto, poi premi «Deforma».");
+        }
+        DeformBtn.IsChecked = on;
+        Photo.DeformMode = on;
+        if (!on)
+        {
+            if (Photo.Placing) Photo.CancelPlacing();
+            if (Photo.LayerBmp != null) Status(Photo.HasWarp ? "Modalità Deforma chiusa: la deformazione resta applicata." : "Modalità Deforma chiusa.");
+        }
+        else if (Photo.PolyDst == null)
+        {
+            Photo.StartPlacing();
+            Status("Deforma: clic sul 1° vertice del poligono (per esempio un angolo del marciapiede o della corsia). Premi «Deforma» o Esc per uscire.");
+        }
+        else Status("Deforma: trascina i vertici del poligono per deformare il progetto, oppure clicca fuori dal poligono per crearne un altro. Premi «Deforma» o Esc per uscire.");
+        Photo.InvalidateVisual();
+    }
+
 }

@@ -361,7 +361,7 @@ public static class Export3D
         double hc = o.CurbHeight;
 
         var box = data?.Box ?? BBox.Empty;
-        foreach (var e in project.Elements.Where(e => e.Polygon.Count >= 3)) box = box.Union(BBox.Of(e.Polygon));
+        foreach (var e in project.Shown.Where(e => e.Polygon.Count >= 3)) box = box.Union(BBox.Of(e.Polygon));
         foreach (var e in project.Edges.Where(e => e.Points.Count >= 2)) box = box.Union(BBox.Of(e.Points));
         if (box.IsEmpty) box = new BBox(-50, -50, 50, 50);
 
@@ -380,7 +380,7 @@ public static class Export3D
         // ── progetto ──
         var proj = new Node { Name = "Progetto" };
         var projectArea = new List<NtsGeometry>();
-        foreach (var e in project.Elements)
+        foreach (var e in project.Shown)
         {
             if (e.Error != null || e.Polygon.Count < 3) continue;
             var pg = ToPoly(e.Polygon);
@@ -460,7 +460,7 @@ public static class Export3D
         if (o.StreetLights)
         {
             var n = new Node { Name = "Lampioni" };
-            foreach (var e in project.Elements.Where(e => e.Error == null && e.Type == ElementType.Marciapiede && e.Mode == ElementMode.Offset))
+            foreach (var e in project.Shown.Where(e => e.Error == null && e.Type == ElementType.Marciapiede && e.Mode == ElementMode.Offset))
             {
                 double L = PL.Length(e.Guide);
                 for (double s = Math.Min(8, L / 2); s < L - 2; s += o.StreetLightSpacing)
@@ -609,7 +609,7 @@ public static class Export3D
 
     static void BuildElement(Node n, Element e, NtsGeometry geom, Export3DOptions o, GpkgData? data)
     {
-        double hc = o.CurbHeight;
+        double hc = e.HasHeight ? e.Height : o.CurbHeight;
         bool raised = e.Type is ElementType.Marciapiede or ElementType.Aiuola
                       || (e.Type == ElementType.Ciclabile && o.RaisedBikeLane);
         var surface = e.Type switch
@@ -743,9 +743,9 @@ public static class Export3D
             ["perspective"] = new JsonObject { ["yfov"] = fovDeg * Math.PI / 180, ["znear"] = 0.1, ["zfar"] = 5000, ["aspectRatio"] = 16.0 / 9 }
         };
         // a terra: sulla pista ciclabile (punto di vista del ciclista), altrimenti in carreggiata o sul primo elemento
-        var bike = p.Elements.FirstOrDefault(e => e.Error == null && e.Type == ElementType.Ciclabile && e.Mode == ElementMode.Offset);
-        var road = p.Elements.FirstOrDefault(e => e.Error == null && e.Type == ElementType.Carreggiata);
-        var line = road?.Inner ?? bike?.Inner ?? p.Elements.FirstOrDefault(e => e.Error == null)?.Inner
+        var bike = p.Shown.FirstOrDefault(e => e.Error == null && e.Type == ElementType.Ciclabile && e.Mode == ElementMode.Offset);
+        var road = p.Shown.FirstOrDefault(e => e.Error == null && e.Type == ElementType.Carreggiata);
+        var line = road?.Inner ?? bike?.Inner ?? p.Shown.FirstOrDefault(e => e.Error == null)?.Inner
                    ?? p.Edges.FirstOrDefault(e => e.Points.Count >= 2)?.Points;
         if (line is { Count: >= 2 })
         {

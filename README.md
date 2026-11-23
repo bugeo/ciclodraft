@@ -27,6 +27,16 @@ python3 packaging/make_mac_app.py pub CicloDraft-mac.zip
 La cartella `modelli` (rimozione delle auto nel fotoinserimento) non è nel repository: va copiata accanto
 all'eseguibile.
 
+## Server MCP
+
+`CicloDraft --mcp` avvia un server [MCP](https://modelcontextprotocol.io) su stdin/stdout: un assistente AI
+può aprire, leggere, modificare ed esportare i progetti. Vedi [LEGGIMI.md](LEGGIMI.md#server-mcp-assistenti-ai).
+
+## Licenza
+
+CicloDraft è software libero, distribuito con la licenza **GNU General Public License v3.0 o successiva**
+(GPL-3.0-or-later): vedi il file [LICENSE](LICENSE).
+
 ## Guida
 
 Tutte le funzioni sono descritte in [LEGGIMI.md](LEGGIMI.md).

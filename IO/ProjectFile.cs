@@ -21,6 +21,23 @@ public static class ProjectFile
         public int NextId { get; set; }
         public double ViewRotation { get; set; }
         public List<PhotoDto>? Photos { get; set; }
+        public List<SectionDto>? Sections { get; set; }
+        public List<GroupDto>? Groups { get; set; }
+    }
+    public class GroupDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public bool Visible { get; set; } = true;
+    }
+    public class SectionDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        /// <summary>Punti A e B in coordinate assolute.</summary>
+        public double[] A { get; set; } = new double[2];
+        public double[] B { get; set; } = new double[2];
+        public bool Flip { get; set; }
     }
     public class PhotoDto
     {
@@ -41,6 +58,7 @@ public static class ProjectFile
     public class ElementDto
     {
         public int Id { get; set; }
+        public int Group { get; set; }
         public string Name { get; set; } = "";
         public ElementType Type { get; set; }
         public ElementMode Mode { get; set; }
@@ -62,6 +80,7 @@ public static class ProjectFile
         public DividerStyle DividerStyle { get; set; }
         public bool? StallLines { get; set; }
         public double? StallLength { get; set; }
+        public double? Height { get; set; }
     }
 
     static readonly JsonSerializerOptions Opts = new()
@@ -70,7 +89,10 @@ public static class ProjectFile
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public static void Save(string path, Project p, GpkgData? data)
+    public static void Save(string path, Project p, GpkgData? data) => File.WriteAllText(path, ToJson(path, p, data));
+
+    /// <summary>Il progetto come lo scriverebbe Save (serve anche a capire se ci sono modifiche non salvate).</summary>
+    public static string ToJson(string path, Project p, GpkgData? data)
     {
         V2 o = data?.Origin ?? new V2(0, 0);
         var dto = new Dto
@@ -79,6 +101,12 @@ public static class ProjectFile
             Origin = new[] { o.X, o.Y },
             NextId = p.NextId,
             ViewRotation = p.ViewRotation,
+            Groups = p.Groups.Count == 0 ? null : p.Groups.Select(g => new GroupDto { Id = g.Id, Name = g.Name, Visible = g.Visible }).ToList(),
+            Sections = p.Sections.Count == 0 ? null : p.Sections.Select(s => new SectionDto
+            {
+                Id = s.Id, Name = s.Name, Flip = s.Flip,
+                A = new[] { s.A.X + o.X, s.A.Y + o.Y }, B = new[] { s.B.X + o.X, s.B.Y + o.Y }
+            }).ToList(),
             Photos = p.Photos.Count == 0 ? null : p.Photos.Select(f => new PhotoDto
             {
                 Path = f.Path, Name = f.Name,
@@ -90,11 +118,12 @@ public static class ProjectFile
             {
                 Id = e.Id, Name = e.Name,
                 Points = e.Points.Select(v => new[] { v.X + o.X, v.Y + o.Y }).ToList(),
-                Anchors = e.Anchors?.Select(a => new EdgeAnchor { X = a.X + o.X, Y = a.Y + o.Y, El = a.El, S = a.S, Follow = a.Follow, Sd = a.Sd, Auto = a.Auto }).ToList(),
+                Anchors = e.Anchors?.Select(a => new EdgeAnchor { X = a.X + o.X, Y = a.Y + o.Y, El = a.El, S = a.S, Follow = a.Follow, Sd = a.Sd, Auto = a.Auto, Curve = a.Curve, Hx = a.Hx, Hy = a.Hy }).ToList(),
                 Owner = e.Owner
             }).ToList(),
             Elements = p.Elements.Select(e => new ElementDto
             {
+                Group = e.Group,
                 Id = e.Id, Name = e.Name, Type = e.Type, Mode = e.Mode,
                 BaseKind = e.Base.Kind, BaseId = e.Base.Id, Start = e.Start, End = e.End,
                 Side = e.Side, Width = e.Width, Smooth = e.Smooth, ToEnd = e.ToEnd,
@@ -103,10 +132,11 @@ public static class ProjectFile
                 OtherKind = e.Other?.Kind, OtherId = e.Other?.Id, Centered = e.Centered,
                 Dividers = e.Dividers, DividerStyle = e.DividerStyle,
                 StallLines = e.Type == ElementType.Parcheggio ? e.StallLines : null,
-                StallLength = e.Type == ElementType.Parcheggio ? e.StallLength : null
+                StallLength = e.Type == ElementType.Parcheggio ? e.StallLength : null,
+                Height = e.HasHeight ? e.Height : null
             }).ToList()
         };
-        File.WriteAllText(path, JsonSerializer.Serialize(dto, Opts));
+        return JsonSerializer.Serialize(dto, Opts);
     }
 
     static string? Rel(string? dir, string file)
@@ -152,6 +182,9 @@ public static class ProjectFile
         catch { }
     }
 
+    public static Dto FromJson(string json) =>
+        JsonSerializer.Deserialize<Dto>(json, Opts) ?? throw new InvalidDataException("Progetto non valido");
+
     public static Dto Read(string path) =>
         JsonSerializer.Deserialize<Dto>(File.ReadAllText(path), Opts) ?? throw new InvalidDataException("File di progetto non valido");
 
@@ -165,24 +198,30 @@ public static class ProjectFile
             if (target == null) { target = new RoadEdge { Id = e.Id }; p.Edges.Add(target); }
             target.Name = e.Name;
             target.Points = e.Points.Select(a => new V2(a[0] - origin.X, a[1] - origin.Y)).ToList();
-            target.Anchors = e.Anchors?.Select(a => new EdgeAnchor { X = a.X - origin.X, Y = a.Y - origin.Y, El = a.El, S = a.S, Follow = a.Follow, Sd = a.Sd == 0 ? 1 : a.Sd, Auto = a.Auto }).ToList();
+            target.Anchors = e.Anchors?.Select(a => new EdgeAnchor { X = a.X - origin.X, Y = a.Y - origin.Y, El = a.El, S = a.S, Follow = a.Follow, Sd = a.Sd == 0 ? 1 : a.Sd, Auto = a.Auto, Curve = a.Curve, Hx = a.Hx, Hy = a.Hy }).ToList();
             target.Owner = e.Owner;
         }
         foreach (var d in dto.Elements)
         {
             p.Elements.Add(new Element
             {
-                Id = d.Id, Name = d.Name, Type = d.Type, Mode = d.Mode,
+                Id = d.Id, Group = d.Group, Name = d.Name, Type = d.Type, Mode = d.Mode,
                 Base = new EdgeRef(d.BaseKind, d.BaseId), Start = d.Start, End = d.End,
                 Side = d.Side == 0 ? 1 : d.Side, Width = d.Width, Smooth = d.Smooth, ToEnd = d.ToEnd,
                 Profile = d.Profile.Select(a => new WidthPoint { T = a[0], W = a[1] }).ToList(),
                 Variators = d.Variators?.Where(a => a.Length >= 3).Select(a => new SectionVariator { T1 = a[0], T2 = a[1], Delta = a[2] }).ToList() ?? new(),
                 Other = d.OtherKind is { } k && d.OtherId is { } id ? new EdgeRef(k, id) : null,
                 Centered = d.Centered, Dividers = d.Dividers, DividerStyle = d.DividerStyle,
-                StallLines = d.StallLines ?? true, StallLength = d.StallLength is > 0 ? d.StallLength.Value : 5.0
+                StallLines = d.StallLines ?? true, StallLength = d.StallLength is > 0 ? d.StallLength.Value : 5.0,
+                Height = d.Height is >= 0 ? d.Height.Value : 0.15
             });
             p.NextId = Math.Max(p.NextId, d.Id + 1);
         }
+        foreach (var g in dto.Groups ?? new()) p.Groups.Add(new ElementGroup { Id = g.Id, Name = g.Name, Visible = g.Visible });
+        foreach (var e in p.Elements) if (e.Group != 0 && p.Groups.All(g => g.Id != e.Group)) e.Group = 0;
+        foreach (var sd in dto.Sections ?? new())
+            if (sd.A is { Length: 2 } && sd.B is { Length: 2 })
+                p.Sections.Add(new CrossSection { Id = sd.Id, Name = sd.Name, Flip = sd.Flip, A = new V2(sd.A[0] - origin.X, sd.A[1] - origin.Y), B = new V2(sd.B[0] - origin.X, sd.B[1] - origin.Y) });
         p.Regenerate();
         return p;
     }

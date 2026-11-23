@@ -48,6 +48,11 @@ public class EdgeAnchor
     public int Sd { get; set; } = 1;
     /// <summary>Vertice aggiunto da «segui il contorno» (lungo un muro): non è un punto chiave, si ricalcola.</summary>
     public bool Auto { get; set; }
+    /// <summary>Punto in curva (Bézier): i lati che vi arrivano si curvano secondo la maniglia (Hx, Hy), simmetrica.</summary>
+    public bool Curve { get; set; }
+    /// <summary>Maniglia della curva: verso il punto successivo è P + H, verso il precedente P − H (metri).</summary>
+    public double Hx { get; set; }
+    public double Hy { get; set; }
 }
 
 public class WidthPoint
@@ -93,9 +98,19 @@ public class Metrics
     public double Length, Area, WMin, WMax, WMean;
 }
 
+/// <summary>Blocco di elementi: per dividere un progetto grande o tenere più versioni di una parte (si mostrano o si nascondono).</summary>
+public class ElementGroup
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool Visible { get; set; } = true;
+}
+
 public class Element
 {
     public int Id { get; set; }
+    /// <summary>Blocco dell'elemento (0 = nessun blocco).</summary>
+    public int Group { get; set; }
     public string Name { get; set; } = "";
     public ElementType Type { get; set; }
     public ElementMode Mode { get; set; }
@@ -113,6 +128,9 @@ public class Element
     public bool StallLines { get; set; } = true;
     /// <summary>Parcheggio: lunghezza di ogni stallo lungo la linea (m).</summary>
     public double StallLength { get; set; } = 5.0;
+    /// <summary>Marciapiede e aiuola: altezza sopra la strada (m).</summary>
+    public double Height { get; set; } = 0.15;
+    public bool HasHeight => Type is ElementType.Marciapiede or ElementType.Aiuola;
 
     public bool HasStalls => Type == ElementType.Parcheggio && Mode == ElementMode.Offset && StallLines && Error == null && Guide.Count >= 2;
 
@@ -293,6 +311,23 @@ public class Project
     public double ViewRotation { get; set; }
     /// <summary>Fotoinserimenti del progetto.</summary>
     public List<PhotoInsertRef> Photos { get; } = new();
+    /// <summary>Sezioni stradali disegnate sulla mappa.</summary>
+    public List<CrossSection> Sections { get; } = new();
+    /// <summary>Blocchi di elementi.</summary>
+    public List<ElementGroup> Groups { get; } = new();
+
+    /// <summary>L'elemento è visibile (fuori da ogni blocco o in un blocco visibile). Gli elementi nascosti restano nel
+    /// progetto (gli altri possono appoggiarsi a loro) ma non si vedono, non si selezionano e non vanno nelle esportazioni.</summary>
+    public bool IsShown(Element e) => e.Group == 0 || Groups.FirstOrDefault(g => g.Id == e.Group) is not { Visible: false };
+    public IEnumerable<Element> Shown => Elements.Where(IsShown);
+    /// <summary>La linea è visibile (non appartiene a un elemento nascosto).</summary>
+    public bool IsShown(RoadEdge ed) => ed.Owner < 0 || Find(ed.Owner) is not { } o || IsShown(o);
+    public string NewGroupName()
+    {
+        int n = Groups.Count + 1;
+        while (Groups.Any(g => g.Name == $"Blocco {n}")) n++;
+        return $"Blocco {n}";
+    }
 
     static readonly GeometryFactory Gf = new();
 
@@ -472,6 +507,20 @@ public class Project
         return res;
     }
 
+    /// <summary>Tratto di Bézier cubica da a a b (senza il punto di partenza; con quello d'arrivo se addEnd).</summary>
+    static IEnumerable<V2> BezierSeg(EdgeAnchor a, EdgeAnchor b, bool addEnd)
+    {
+        var p0 = new V2(a.X, a.Y); var p3 = new V2(b.X, b.Y);
+        var p1 = a.Curve ? p0 + new V2(a.Hx, a.Hy) : p0;
+        var p2 = b.Curve ? p3 - new V2(b.Hx, b.Hy) : p3;
+        const int K = 24;
+        for (int k = 1; k <= (addEnd ? K : K - 1); k++)
+        {
+            double t = k / (double)K, u = 1 - t;
+            yield return p0 * (u * u * u) + p1 * (3 * u * u * t) + p2 * (3 * u * t * t) + p3 * (t * t * t);
+        }
+    }
+
     /// <summary>Ricalcola i bordi agganciati; true se almeno uno è cambiato.</summary>
     public bool UpdateLinkedEdges()
     {
@@ -487,7 +536,12 @@ public class Project
                 var el = a.El >= 0 ? Find(a.El) : null;
                 var p = el != null && AnchorPoint(el, a.S, a.Sd) is { } q ? q : new V2(a.X, a.Y);
                 a.X = p.X; a.Y = p.Y;
-                if (i > 0 && an[i - 1] is { Follow: true } pa && pa.El == a.El && el is { Error: null } && prev is { } pp)
+                if (i > 0 && (an[i - 1].Curve || a.Curve) && !an[i - 1].Follow)
+                {
+                    // tratto curvo (Bézier) verso un punto in curva o da un punto in curva
+                    pts.AddRange(BezierSeg(an[i - 1], a, false));
+                }
+                else if (i > 0 && an[i - 1] is { Follow: true } pa && pa.El == a.El && el is { Error: null } && prev is { } pp)
                     pts.AddRange(OuterPath(el, pp, p, a.Sd));
                 else if (i > 0 && prev is { } pp2)
                 {
@@ -502,6 +556,9 @@ public class Project
                 }
                 pts.Add(p); prev = p;
             }
+            // poligono: tratto di chiusura curvo
+            if (an.Count >= 3 && (an[^1].Curve || an[0].Curve) && !an[^1].Follow && edge.Owner >= 0 && Find(edge.Owner) is { Mode: ElementMode.Polygon })
+                pts.AddRange(BezierSeg(an[^1], an[0], false));
             pts = PL.Dedup(pts);
             if (pts.Count >= 2 && (pts.Count != edge.Points.Count || pts.Zip(edge.Points).Any(z => V2.Dist(z.First, z.Second) > 1e-4)))
             {

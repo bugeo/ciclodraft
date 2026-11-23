@@ -95,6 +95,13 @@ public class PhotoInsertFile
     public PhotoCamera? Camera { get; set; }
     public double CameraHeightHint { get; set; } = 1.7;
     public string? Mask { get; set; }
+    /// <summary>Versione precedente: angoli del progetto deformato (alto sx, alto dx, basso dx, basso sx). Solo lettura.</summary>
+    public double[]? Warp { get; set; }
+    /// <summary>Deformazione già fissata (omografia 3×3, pixel del progetto → pixel della foto); null = nessuna.</summary>
+    public double[]? WarpBase { get; set; }
+    /// <summary>Poligono della deformazione: i 4 vertici come sono stati posati (Src) e dove sono stati spostati (Dst).</summary>
+    public double[]? WarpSrc { get; set; }
+    public double[]? WarpDst { get; set; }
 
     static readonly JsonSerializerOptions Opts = new() { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     public void Save(string path) => File.WriteAllText(path, JsonSerializer.Serialize(this, Opts));

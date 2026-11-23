@@ -50,57 +50,55 @@ partendo da un GeoPackage con i muri delle abitazioni, ed esportare il progetto 
    - Esempio: il DBGT di Mantova (123 MB, 86 livelli) ritagliato sull'area dello shapefile AC_PED
      diventa un file di 2 MB con 8 livelli, in meno di un secondo.
 
-In alto ci sono i menu: **File** (Apri progetto, Apri GeoPackage, Ritaglia dati, Salva),
+In alto ci sono i menu: **File** (Apri progetto, Apri GeoPackage, Ritaglia dati, Salva, Salva con nome),
+**Modifica** (Annulla, Ripeti),
 **Esporta** (DXF, 3D, CSV) e **Visualizza** (*Etichette con i nomi degli elementi*
 sulla mappa, attive o no; DXF con o senza contesto, con o senza etichette). Il riquadro con la **cornice verde** è quello su cui agire adesso (stessi colori e stessa
-guida di SpeedVision). A sinistra stanno *Livelli*, *Elementi*, *Fotoinserimenti* e *Totali per tipo*. I riquadri per
+guida di SpeedVision). A sinistra stanno *Livelli*, *Elementi*, *Fotoinserimenti*, *Sezioni* e *Totali per tipo*. I riquadri per
 aggiungere o modificare un elemento compaiono a destra, sopra la mappa, solo quando servono: la mappa
 resta sempre a tutta larghezza. Sulla mappa: **Adatta vista** in
 alto a sinistra e **+ Aggiungi elemento** in alto al centro.
 
-1. **Inizia** – all'avvio, al centro della mappa: *Apri progetto…* (un `.ciclo` salvato) oppure
+1. **Avvio** – al centro della mappa: *Apri progetto…* (un `.ciclo` salvato) oppure
    *Apri GeoPackage…* (anche dal menu File, Ctrl+O apre un progetto, Ctrl+S salva). Aprendo un
    GeoPackage il primo passo sono i livelli; aprendo un progetto salvato i livelli sono già impostati
    e il loro riquadro resta chiuso (*Modifica* lo riapre).
+   Sotto ai pulsanti c'è l'elenco **Aperti di recente** con gli ultimi 5 progetti e GeoPackage aperti:
+   clic su una riga per riaprirlo, clic sulla **puntina** per fissarlo in alto all'elenco (resta anche se
+   ne apri altri; un secondo clic lo toglie). Un file spostato o cancellato viene tolto dall'elenco.
 2. **Livelli** – per ogni livello, sotto al nome, scegli il ruolo (*Muri abitazioni*, *Marciapiedi*,
    *Sfondo*, *Edifici 3D* o *Nascosto*; il programma lo propone dal nome) e la casella **Visibile**
    per vederlo o no sulla mappa (un livello non visibile conserva il suo ruolo: i muri continuano a
    servire per l'aggancio). Premi **Conferma i livelli**: il riquadro si chiude in una riga di
    riepilogo (con *Modifica* per riaprirlo) e in alto sulla mappa compare **+ Aggiungi elemento**.
    Ruoli e visibilità si salvano nel progetto.
-3. **Aggiungi elemento** – il pulsante in alto sulla mappa apre il riquadro a destra, sopra la mappa (✕ lo chiude;
-   dopo «Disegna» si chiude da solo). All'inizio mostra solo la scelta dell'elemento (nessuno è
-   preselezionato); scelto l'elemento compaiono la **modalità** e il resto:
-   - **Tracciato**: l'elemento si sviluppa lungo una linea. Scegli cosa disegni:
-     - **Bordo**: l'elemento sta da un lato della linea (es. un marciapiede lungo i muri, una ciclabile
-       lungo un marciapiede). Dopo il disegno il programma propone il lato libero; *Inverti lato* se serve.
-     - **Interasse**: l'elemento sta metà per parte (per carreggiata, corsia doppia e striscia gialla è
-       già proposto).
+3. **Aggiungi elemento** – il pulsante in alto sulla mappa (o **+ Nuovo** nel riquadro *Elementi*, verde
+   con il riquadro incorniciato finché non c'è ancora nessun elemento) apre il riquadro a destra, sopra la
+   mappa (✕ lo chiude; dopo «Disegna» si chiude da solo). All'inizio chiede solo **Tracciato** o **Poligono**:
+   - **Poligono**: si comincia subito a disegnare il contorno chiuso dell'elemento (un'aiuola, un'isola, una
+     piazzola): clic su ogni vertice, doppio clic o Invio per chiuderlo. **Appena chiuso il poligono si salva**
+     e resta selezionato. L'elemento si sceglie nella tendina mentre disegni (se non lo scegli vale l'ultimo
+     usato) e si può sempre cambiare da *Elemento selezionato*. Di un poligono si misurano superficie e
+     perimetro.
+   - **Tracciato**: l'elemento si sviluppa lungo una linea. Scegli cosa disegni e premi **Disegna sulla mappa**:
+     - **Bordo**: l'elemento sta da un lato della linea (es. un marciapiede lungo i muri, una ciclabile lungo
+       un marciapiede). Dopo il disegno il programma propone il lato libero; *Inverti lato* se serve.
+     - **Interasse**: l'elemento sta metà per parte (es. carreggiata, corsia doppia).
      - **Riempimento**: occupa lo spazio tra due elementi già disegnati: clicca il contorno del primo,
        scegli il tratto, poi il contorno del secondo.
-   - **Poligono**: disegni il contorno chiuso dell'elemento (un'aiuola, un'isola, una piazzola):
-     clic su ogni vertice, doppio clic o Invio per chiuderlo. Di un poligono si misurano superficie e
-     perimetro.
 
-   Premi **Disegna sulla mappa** (o *Disegna il poligono*) e disegna: clic per ogni punto, doppio clic
-   o Invio per finire, Backspace per togliere l'ultimo, Esc per annullare. Per un tracciato imposta poi
-   la larghezza; controlla l'anteprima e premi **Disegna**. In entrambe le modalità:
+   Scelta la modalità compaiono *Aggancia* e *Segui il contorno*. Durante il disegno: clic per ogni punto,
+   doppio clic o Invio per finire, Backspace per togliere l'ultimo, Esc per annullare.
+   Per un tracciato, **alla fine** si sceglie l'**elemento** (marciapiede, pista ciclabile, carreggiata…) nella
+   tendina: finché non è scelto, *Disegna* resta spento. Per un tracciato imposta anche la larghezza (quella predefinita
+   segue l'elemento scelto); controlla l'anteprima e premi **Disegna**. In entrambe le modalità:
    - *Aggancia*: il punto si attacca a vertici e lati dei muri, dei marciapiedi esistenti e degli
      **elementi già disegnati** (quadrato = vertice, X = lato).
    - *Segui il contorno*: con due clic sullo stesso edificio o elemento, la linea ne segue il profilo
      (rientranze, sporgenze, spigoli). Per un elemento tutto attorno a un edificio: clic sui vertici e
      di nuovo sul primo.
-   - **Lungo come …**: se il primo punto di un tracciato si aggancia al contorno di un elemento già
-     disegnato, compare il pulsante «Lungo come «Marciapiede 1»»: la linea del nuovo elemento prende
-     tutto quel contorno, da un capo all'altro (o tutto il giro, se l'elemento gira attorno a un
-     edificio), e lo segue se cambia.
-   - L'**elemento** si può cambiare dalla tendina anche dopo averlo scelto, mentre disegni o con
-     l'anteprima già visibile: la linea resta, e la larghezza passa a quella tipica del nuovo elemento
-     se non l'avevi cambiata a mano.
    - I punti cliccati sul contorno di un elemento restano **agganciati**: se poi quell'elemento si
-     allarga, si restringe o si spezza, la linea (o il lato del poligono) lo segue. Esempio: due
-     edifici con un marciapiede attorno a ciascuno, poi una ciclabile con due clic sul lato strada del
-     primo marciapiede e due sul secondo: la ciclabile costeggia entrambi e li segue.
+     allarga, si restringe o si spezza, la linea (o il lato del poligono) lo segue.
 
    Elementi disponibili:
    - *Marciapiede*, *Pista ciclabile* (in sede propria, in resina rossa; rialzabile nel 3D),
@@ -144,7 +142,7 @@ ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affianca
   arancione = fine). Più variatori si sommano: per esempio un allargamento a metà via e poi un restringimento più
   avanti. Sulla mappa il tratto di passaggio è evidenziato in arancione. La fine può stare anche prima
   dell'inizio: in quel caso il cambio vale verso l'inizio della linea. *Larghezza costante* toglie i
-  variatori; anche *Ridisegnala da capo* li toglie, perché la linea cambia.
+  variatori.
 - **Spezzare il bordo esterno**: doppio clic sul bordo esterno (linea blu) in un punto. Compare un
   quadratino: trascinalo per cambiare la larghezza in quel punto (la larghezza varia linearmente tra
   i punti). Ctrl+clic su un quadratino per toglierlo; *Larghezza costante* li toglie tutti.
@@ -168,10 +166,15 @@ ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affianca
   «fine» e le scritte «sinistra» e «destra». Il nuovo elemento viene selezionato: cambiane tipo,
   larghezza, strisce o linea come per qualsiasi elemento. Resta agganciato: se l'elemento di partenza
   si allarga o cambia linea, lo segue. Se da quel lato c'era già un altro elemento, un avviso lo dice.
-- **Ridisegnala da capo**: rifà il bordo, l'interasse o il contorno del poligono (Esc lo lascia com'era).
 - **Tratto**: *Da/A* sulla linea di aggancio (solo per gli elementi riempiti tra due elementi e per
   i progetti precedenti).
 - *Inverti lato* (solo per gli elementi disegnati dal bordo).
+- **Converti in poligono** (elementi tracciati): l'elemento diventa un poligono con il contorno che ha in
+  quel momento. Prima di convertire compare un avviso: **non si può tornare indietro**. Larghezza,
+  variatori di sezione, strisce di mezzeria e lato non saranno più modificabili; restano tipo, nome e
+  superficie, e con *Modifica la linea* si spostano i vertici del contorno. Gli elementi agganciati al suo
+  contorno restano dove sono ma non lo seguono più; se un elemento è riempito tra questo e un altro, la
+  conversione non è possibile finché non lo elimini.
 - *Elimina elemento* (o tasto Canc): con l'elemento se ne va anche la sua linea. Un elemento usato
   per riempire tra due elementi non si elimina finché non elimini prima quello; le linee che lo
   seguivano restano dov'erano.
@@ -179,6 +182,29 @@ ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affianca
 Per ogni elemento il programma calcola **estensione** (lunghezza della linea disegnata),
 **superficie**, **larghezza minima, massima e media** (misurate tra il bordo interno reale e il
 bordo esterno, ogni 10 cm circa). In basso a destra ci sono i totali per tipo.
+
+## Sezioni stradali
+
+Il riquadro **Sezioni** (a sinistra) raccoglie le sezioni del progetto.
+
+- **+ Nuova**: clic sulla mappa sul punto **A**, da un lato della strada, poi sul punto **B**, dall'altro
+  lato (i punti si agganciano a muri ed elementi). Il programma disegna la strada in sezione lungo la linea A–B.
+- **Sulla mappa** la sezione è una linea nera; ai due capi una freccia indica il verso in cui la si guarda.
+  Clic sulla linea per aprirla; con la sezione aperta i capi A e B si trascinano per spostarla.
+- **Disegno in sezione** (in basso, sopra la mappa): gli elementi tagliati dalla linea come fasce colorate
+  (marciapiedi e aiuole rialzati di 15 cm, quote in altezza esagerate per leggerle), gli edifici tagliati ai
+  lati, il numero di ogni elemento e le quote: la larghezza di ciascun elemento, il **totale degli elementi** e,
+  se la linea arriva agli edifici, la distanza **tra gli edifici**. A destra l'elenco con numero, nome, tipo
+  e larghezza di ogni elemento e la larghezza complessiva.
+- **Elementi uno dentro l'altro** (es. parcheggi disegnati dentro la carreggiata): nella sezione l'elemento
+  interno sta sopra e divide quello che lo contiene (carreggiata – parcheggio – carreggiata), nell'elenco è
+  indicato «dentro Carreggiata 1» e la larghezza complessiva non conta due volte la stessa striscia. Per le
+  sovrapposizioni parziali vale l'elemento disegnato dopo. Anche sulla mappa gli elementi più piccoli stanno
+  sopra a quelli più grandi e un clic seleziona quello più piccolo.
+- **Inverti verso**: guarda la sezione dall'altro lato della linea (le frecce sulla mappa si girano e nel
+  disegno destra e sinistra si scambiano).
+- Il nome si cambia nella casella in alto; il cestino elimina la sezione; ✕ (o Esc) la chiude.
+- Le sezioni si salvano nel progetto.
 
 ## Esportazione
 
@@ -258,8 +284,9 @@ Il fotoinserimento disegna il progetto in prospettiva su una foto reale della vi
 
 Nel fotoinserimento:
 
-1. **Apri foto…** – una foto scattata ad altezza d'uomo (o uno screenshot di Street View solo per
-   studio: per pubblicarlo valgono le condizioni d'uso di Google). Indica sotto se è stata scattata
+1. **La foto** – si sceglie con *+ Nuovo* nel riquadro Fotoinserimenti e si apre alla massima larghezza:
+   una foto scattata ad altezza d'uomo (o uno screenshot di Street View solo per
+   studio: per pubblicarlo valgono le condizioni d'uso di Google). Indica a destra se è stata scattata
    a piedi (1,7 m), da Street View (2,5 m) o da una finestra.
 2. **Punti** – clic su un punto riconoscibile della foto, poi sullo stesso punto della mappa a destra
    (si aggancia ai vertici). Sopra la mappa: ⟲/⟳ ruotano la vista di 15° (anche Ctrl+rotella),
@@ -271,25 +298,33 @@ Nel fotoinserimento:
    *Quota = altezza edificio* se i dati hanno le altezze (DBGT: UN_VOL).
    Il programma calcola posizione, direzione, inclinazione e obiettivo della fotocamera e mostra
    l'errore di ogni punto (verde sotto 6 px). Un punto rosso è quasi sempre abbinato male.
+   **Reset** (in alto, prima dei passi) elimina, dopo conferma, tutti i punti, la fotocamera calcolata e la
+   deformazione e riparte dal passo 1; la maschera e la foto senza auto restano.
 3. **Verifica** – sulla foto compaiono gli edifici a terra (rosso), le gronde (giallo, se ci sono le
    altezze), i marciapiedi esistenti (azzurro) e il progetto (blu): devono combaciare.
 4. **Fotoinserimento** – il progetto con texture, cordoli e segnaletica; gli edifici lo coprono dove
-   serve e le ombre della foto vengono riportate sul progetto. Con **Maschera: dipingi** si colora
-   ciò che deve restare davanti (auto, persone, pali, alberi); *Gomma* per correggere.
-   Regola luminosità, ombre e opacità: con opacità 1 il progetto è pienamente coprente (dalla foto
-   prende solo le ombre ampie, non la trama della pavimentazione).
-   **▶ Anteprima** mostra subito il risultato nella vista grande (senza esportare); tieni premuto
-   *◐ Originale* per confrontare prima e dopo.
-5. **Rimuovi auto** – riconosce auto, furgoni, moto e persone nella foto, ne ritaglia la sagoma e,
-   con la fotocamera calcolata, la appoggia a terra: le auto che toccano i tracciati disegnati
-   (compresa la carrozzeria oltre le ruote visibili) vengono cancellate e la foto viene ricostruita
-   al loro posto, ombra compresa. Le altre auto e le persone restano e vengono aggiunte da sole alla
-   maschera, così passano davanti al progetto. Richiede circa un minuto; il risultato si salva
-   accanto alla foto (`foto.senza_auto.png`). La casella *Senza auto* passa dalla foto ripulita a
-   quella originale. Se il progetto cambia, premi di nuovo *Rimuovi auto*. I ritocchi fini si fanno
-   con la maschera e la gomma. Serve la cartella `modelli` accanto a `CicloDraft.exe` (circa 350 MB:
-   YOLOX-s per riconoscere gli oggetti, Segment Anything per le sagome, LaMa per la ricostruzione;
-   tutti con licenza Apache 2.0, funzionano senza internet).
+   serve e le ombre della foto vengono riportate sul progetto. Regola luminosità, ombre e opacità: con
+   opacità 1 il progetto è pienamente coprente (dalla foto prende solo le ombre ampie, non la trama della
+   pavimentazione).
+   **Deforma**: se il progetto non combacia perfettamente con la foto, premi *Deforma*: il pulsante
+   resta verde finché la modalità è attiva. Clicca quattro vertici sulla foto (per esempio i quattro angoli
+   di un tratto di marciapiede o di corsia disegnato): si crea un poligono. Trascinando i suoi vertici il
+   progetto si deforma in prospettiva, in modo che quei punti finiscano dove li porti; trascinando dentro il
+   poligono lo sposti tutto; cliccando fuori dal poligono ne inizi uno nuovo (la deformazione fatta resta).
+   La deformazione vale per tutto il progetto: scegli un poligono ampio, attorno alla parte che ti
+   interessa. Premi di nuovo *Deforma* (o Esc) per uscire: il poligono sparisce e la deformazione resta
+   applicata. Le auto e le persone davanti restano sopra al progetto. La deformazione si salva con il
+   fotoinserimento e vale anche per l'immagine esportata; **Annulla deformazione** riporta il progetto
+   com'era.
+5. **Rimuovi auto** (casella) – la prima volta che la spunti il programma riconosce auto, furgoni, moto
+   e persone nella foto, ne ritaglia la sagoma e, con la fotocamera calcolata, la appoggia a terra: le auto
+   che toccano i tracciati disegnati (compresa la carrozzeria oltre le ruote visibili) vengono cancellate e
+   la foto viene ricostruita al loro posto, ombra compresa. Le altre auto e le persone restano e passano
+   davanti al progetto. Il calcolo richiede circa un minuto e si salva accanto alla foto
+   (`foto.senza_auto.png`); dopo, la casella passa subito dalla foto ripulita a quella originale. Serve la
+   cartella `modelli` accanto a `CicloDraft.exe` (circa 350 MB: YOLOX-s per riconoscere gli oggetti,
+   Segment Anything per le sagome, LaMa per la ricostruzione; tutti con licenza Apache 2.0, funzionano
+   senza internet).
 6. **Esporta immagine…** – salva l'immagine finita e, accanto, `…_livello.png` con il solo progetto
    su fondo trasparente, per il fotoritocco.
 
@@ -331,6 +366,74 @@ disegnati sono sempre nitidi.
 - `samples/make_sample_gpkg.py` e `samples/make_sample_curve.py` rigenerano i GeoPackage di esempio
   (Python 3, solo libreria standard). Puoi cambiare curve, larghezze ed edifici modificando i valori
   in testa allo script.
+
+## Server MCP (assistenti AI)
+
+CicloDraft include un server [MCP](https://modelcontextprotocol.io) (Model Context Protocol): un assistente
+AI come Claude può aprire un progetto, leggere elementi e misure, modificarli, disegnarne di nuovi ed
+esportare DXF, CSV e 3D, usando lo stesso motore del programma. Si avvia con lo stesso eseguibile:
+
+```
+CicloDraft.exe --mcp
+```
+
+(su Mac: `CicloDraft.app/Contents/MacOS/CicloDraft --mcp`). Comunica su stdin/stdout e non apre finestre.
+
+**Configurazione in Claude Desktop** (`claude_desktop_config.json`, menu *Impostazioni → Sviluppatore →
+Modifica configurazione*):
+
+```json
+{
+  "mcpServers": {
+    "ciclodraft": {
+      "command": "E:\\claude cowork\\ciclodraft\\CicloDraft.exe",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+**Strumenti**
+
+| Strumento | Cosa fa |
+|---|---|
+| `apri_progetto` | apre un `.ciclo` (con il suo GeoPackage) e ne restituisce il riepilogo |
+| `apri_geopackage` | inizia un progetto vuoto su un GeoPackage |
+| `elenco_livelli` | livelli con geometria, numero di elementi, ruolo e visibilità |
+| `elenco_elementi` | elementi con tipo, modalità, larghezza, estensione, superficie e larghezze |
+| `dettaglio_elemento` | tutto di un elemento: linea, misure, variatori, strisce, stalli |
+| `totali` | superfici e lunghezze per tipo |
+| `disegna_elemento` | nuovo elemento da punti [E, N]: dal bordo, dall'interasse o come poligono |
+| `modifica_elemento` | nome, tipo, larghezza, lato, strisce di mezzeria, stalli del parcheggio |
+| `aggiungi_variatore` / `elimina_variatore` | variatori di sezione (progressive in metri lungo la linea) |
+| `affianca_elemento` | nuovo elemento a destra o a sinistra, lungo come quello indicato |
+| `elimina_elemento` | elimina un elemento |
+| `salva_progetto` | salva il `.ciclo` (stesso file o un altro) |
+| `esporta_dxf` / `esporta_csv` / `esporta_3d` | esportazioni, come dal menu Esporta |
+
+Le coordinate sono in metri nel sistema di riferimento del GeoPackage. Le modifiche restano in memoria
+finché non si chiama `salva_progetto`; il server lavora sui file e non sulla finestra del programma
+eventualmente aperta (dopo il salvataggio, riapri il progetto nel programma per vederle).
+
+## Annulla e ripeti
+
+**Annulla** (Ctrl+Z, ⌘Z sul Mac) torna indietro di un'operazione: un elemento disegnato, eliminato o
+modificato (larghezza, tipo, linea, variatori, strisce, stalli…), una sezione, un fotoinserimento aggiunto o
+tolto, la rotazione della vista. Si possono annullare fino a 100 operazioni. **Ripeti** (Ctrl+Y o
+Ctrl+Maiusc+Z) rifà quello che è stato annullato. Mentre si sta disegnando, Annulla interrompe il disegno in
+corso. Si trovano anche nel menu *Modifica*. Aprendo un altro progetto la cronologia riparte; i punti del
+fotoinserimento hanno il loro *Reset*.
+
+## Salvataggio e chiusura
+
+*Salva* (Ctrl+S) scrive nel file `.ciclo` aperto o salvato per ultimo; la prima volta chiede dove salvarlo.
+*Salva con nome…* lo salva in un altro file. Se chiudi la finestra con modifiche non salvate, il programma
+lo segnala e propone **Salva**, **Non salvare** o **Annulla** (resta nel programma).
+
+## Licenza
+
+CicloDraft è software libero: puoi ridistribuirlo e modificarlo secondo i termini della GNU General
+Public License, versione 3 o (a tua scelta) successiva. Il testo completo è nel file `LICENSE`.
 
 ## Struttura del codice
 

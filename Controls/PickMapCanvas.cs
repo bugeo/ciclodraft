@@ -84,8 +84,8 @@ public class PickMapCanvas : Control
                 }
         if (Project != null && ShowProject)
         {
-            foreach (var e in Project.Edges) if (e.Points.Count >= 2) yield return e.Points;
-            foreach (var el in Project.Elements)
+            foreach (var e in Project.Edges) if (e.Points.Count >= 2 && Project.IsShown(e)) yield return e.Points;
+            foreach (var el in Project.Shown)
                 if (el.Polygon.Count >= 3) { var c = new List<V2>(el.Polygon) { el.Polygon[0] }; yield return c; }
         }
     }
@@ -143,14 +143,14 @@ public class PickMapCanvas : Control
             }
         if (Project != null && ShowProject)
         {
-            foreach (var e in Project.Elements.Where(e => e.Polygon.Count >= 3))
+            foreach (var e in Project.Shown.Where(e => e.Polygon.Count >= 3))
             {
                 var (f, s) = MapCanvas.Colors(e.Type, 170);
                 var g = new StreamGeometry();
                 using (var c = g.Open()) { c.BeginFigure(S(e.Polygon[0]), true); foreach (var p in e.Polygon.Skip(1)) c.LineTo(S(p)); c.EndFigure(true); }
                 ctx.DrawGeometry(f, new Pen(s, 1), g);
             }
-            foreach (var e in Project.Edges.Where(e => e.Points.Count >= 2))
+            foreach (var e in Project.Edges.Where(e => e.Points.Count >= 2 && Project.IsShown(e)))
                 for (int i = 0; i + 1 < e.Points.Count; i++) ctx.DrawLine(new Pen(EdgeB, 2), S(e.Points[i]), S(e.Points[i + 1]));
         }
 
