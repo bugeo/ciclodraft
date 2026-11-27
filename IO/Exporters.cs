@@ -22,9 +22,11 @@ public static class DxfWriter
         ElementType.Corsia => "CD_CORSIA",
         ElementType.Parcheggio => "CD_PARCHEGGIO",
         ElementType.Aiuola => "CD_AIUOLA",
+        ElementType.Ciclopedonale => "CD_CICLOPEDONALE",
         ElementType.Separatore => "CD_SEPARATORE_GIALLO",
         ElementType.CorsiaCiclabile => "CD_CORSIA_CICLABILE",
         ElementType.CorsiaDoppia => "CD_CORSIA_DOPPIA",
+        ElementType.Indefinito => "CD_INDEFINITO",
         _ => "CD_ELEMENTI"
     };
 
@@ -36,6 +38,7 @@ public static class DxfWriter
         ElementType.Corsia => 4,
         ElementType.Parcheggio => 5,
         ElementType.Aiuola => 3,
+        ElementType.Ciclopedonale => 21,
         ElementType.Separatore => 2,
         ElementType.CorsiaCiclabile => 30,
         ElementType.CorsiaDoppia => 140,

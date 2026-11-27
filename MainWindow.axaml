@@ -35,10 +35,12 @@
             <MenuItem x:Name="ExportDxfMenu" Header="DXF…" />
             <MenuItem x:Name="Export3DMenu" Header="3D…" />
             <MenuItem x:Name="ExportCsvMenu" Header="CSV…" />
+            <MenuItem x:Name="ExportPdfMenu" Header="PDF…" />
           </MenuItem>
           <MenuItem Header="_Visualizza">
             <MenuItem x:Name="MapLabelsMenu" Header="Etichette con i nomi degli elementi" ToggleType="CheckBox" IsChecked="True" />
             <MenuItem x:Name="PhotoIconsMenu" Header="Icone dei fotoinserimenti" ToggleType="CheckBox" IsChecked="True" />
+            <MenuItem x:Name="NotesMenu" Header="Disegni e note" ToggleType="CheckBox" IsChecked="True" />
             <Separator />
             <MenuItem x:Name="DxfContextOnMenu" Header="DXF con contesto" ToggleType="Radio" GroupName="dxfctx" IsChecked="True" />
             <MenuItem x:Name="DxfContextOffMenu" Header="DXF senza contesto" ToggleType="Radio" GroupName="dxfctx" />
@@ -104,16 +106,46 @@
             </StackPanel>
           </Border>
 
+          <!-- schede: un riquadro alla volta -->
+          <Border x:Name="LeftTabs" Classes="tabs" IsVisible="False">
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="3">
+              <Button x:Name="LTabGroups" Classes="tab" Padding="4,8">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Gruppi" FontSize="13" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="LCntGroups" Text="(0)" FontSize="12" HorizontalAlignment="Center" Opacity="0.75" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="LTabPhotos" Grid.Column="1" Classes="tab" Padding="4,8">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Foto ins." FontSize="13" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="LCntPhotos" Text="(0)" FontSize="12" HorizontalAlignment="Center" Opacity="0.75" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="LTabSections" Grid.Column="2" Classes="tab" Padding="4,8">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Sezioni" FontSize="13" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="LCntSections" Text="(0)" FontSize="12" HorizontalAlignment="Center" Opacity="0.75" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="LTabElements" Grid.Column="3" Classes="tab on" Padding="4,8">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="Elementi" FontSize="13" HorizontalAlignment="Center" />
+                  <TextBlock x:Name="LCntElements" Text="(0)" FontSize="12" HorizontalAlignment="Center" Opacity="0.75" />
+                </StackPanel>
+              </Button>
+            </Grid>
+          </Border>
           <Border x:Name="GroupsCard" Classes="card" IsVisible="False">
             <StackPanel Spacing="6">
               <DockPanel>
-                <Button x:Name="NewGroupBtn" DockPanel.Dock="Right" Padding="10,4" VerticalAlignment="Center" ToolTip.Tip="Nuovo blocco (l'elemento selezionato ci entra)">
+                <Button x:Name="NewGroupBtn" DockPanel.Dock="Right" Padding="10,4" VerticalAlignment="Center" ToolTip.Tip="Nuovo gruppo (l'elemento selezionato ci entra)">
                   <StackPanel Orientation="Horizontal" Spacing="5">
                     <TextBlock Text="+" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Text="Nuovo" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <TextBlock Classes="sectionTitle" Text="Blocchi" VerticalAlignment="Center" />
+                <TextBlock Classes="sectionTitle" Text="Gruppi" VerticalAlignment="Center" IsVisible="False" />
+                <TextBox x:Name="GroupSearch" Watermark="Cerca…" FontSize="12" Padding="8,4" MinHeight="28" VerticalAlignment="Center" Margin="0,0,8,0" />
               </DockPanel>
               <StackPanel x:Name="GroupList" Spacing="2" />
             </StackPanel>
@@ -128,7 +160,8 @@
                     <TextBlock Text="Nuovo" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <TextBlock Classes="sectionTitle" Text="Elementi" VerticalAlignment="Center" />
+                <TextBlock Classes="sectionTitle" Text="Elementi" VerticalAlignment="Center" IsVisible="False" />
+                <TextBox x:Name="ElemSearch" Watermark="Cerca…" FontSize="12" Padding="8,4" MinHeight="28" VerticalAlignment="Center" Margin="0,0,8,0" />
               </DockPanel>
               <TextBlock x:Name="NoElemText" Classes="note" Text="Nessun elemento. Premi «+ Nuovo» (o «Aggiungi elemento» in alto sulla mappa) per disegnare il primo." />
               <ListBox x:Name="ElementsList" MaxHeight="320">
@@ -154,7 +187,8 @@
                     <TextBlock Text="Nuovo" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <TextBlock Classes="sectionTitle" Text="Fotoinserimenti" VerticalAlignment="Center" />
+                <TextBlock Classes="sectionTitle" Text="Fotoinserimenti" VerticalAlignment="Center" IsVisible="False" />
+                <TextBox x:Name="PhotoSearch" Watermark="Cerca…" FontSize="12" Padding="8,4" MinHeight="28" VerticalAlignment="Center" Margin="0,0,8,0" />
               </DockPanel>
               <TextBlock x:Name="NoPhotoText" Classes="note" Text="Nessun fotoinserimento. Premi «Nuovo» e scegli una foto della via." />
               <StackPanel x:Name="PhotoList" Spacing="2" />
@@ -170,7 +204,8 @@
                     <TextBlock Text="Nuova" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <TextBlock Classes="sectionTitle" Text="Sezioni" VerticalAlignment="Center" />
+                <TextBlock Classes="sectionTitle" Text="Sezioni" VerticalAlignment="Center" IsVisible="False" />
+                <TextBox x:Name="SectionSearch" Watermark="Cerca…" FontSize="12" Padding="8,4" MinHeight="28" VerticalAlignment="Center" Margin="0,0,8,0" />
               </DockPanel>
               <TextBlock x:Name="NoSectionText" Classes="note" Text="Nessuna sezione. Premi «+ Nuova» e clicca due punti A e B sulla mappa, da un lato all'altro della strada." />
               <StackPanel x:Name="SectionList" Spacing="2" />
@@ -207,16 +242,33 @@
 
     <Panel>
       <c:MapCanvas x:Name="Map" />
+      <!-- testo di una nota mentre lo si scrive -->
+      <Canvas x:Name="NoteCanvas">
+        <TextBox x:Name="NoteTextBox" IsVisible="False" MinWidth="160" AcceptsReturn="True" FontWeight="SemiBold" Padding="4,2" />
+      </Canvas>
       <!-- in alto a sinistra: adatta la vista a tutto il disegno -->
-      <StackPanel x:Name="ViewBtns" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="14,14,0,0" IsVisible="False">
-        <Button x:Name="ZoomBtn" Content="⤢  Adatta vista" Classes="mapbtn" />
-        <Button x:Name="RotPlusBtn" Content="⟲ +5°" Classes="mapbtn" ToolTip.Tip="Ruota il disegno di 5° in senso antiorario" />
-        <Button x:Name="RotMinusBtn" Content="⟳ −5°" Classes="mapbtn" ToolTip.Tip="Ruota il disegno di 5° in senso orario" />
-        <Button x:Name="RotResetBtn" Classes="mapbtn" IsVisible="False" ToolTip.Tip="Torna con il nord in alto" />
-      </StackPanel>
       <!-- in alto al centro: apre il riquadro «Aggiungi elemento» -->
       <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,14,0,0">
         <Button x:Name="MapAddBtn" Classes="primary" Content="＋  Aggiungi elemento" IsVisible="False" Padding="16,9" FontSize="13.5" />
+        <Button x:Name="ShowGroupsBtn" Classes="mapbtn" IsVisible="False" Padding="14,9" FontSize="13.5" ToolTip.Tip="Mostra o nasconde i bordi colorati dei gruppi">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <PathIcon x:Name="ShowGroupsIcon" Data="{StaticResource IconEye}" Width="15" Height="15" />
+            <TextBlock Text="Gruppi" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="SaveGroupBtn" Classes="accent" IsVisible="False" Padding="16,9" FontSize="13.5">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <PathIcon Data="{StaticResource IconFloppy}" Width="14" Height="14" />
+            <TextBlock x:Name="SaveGroupText" Text="Salva gruppo" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="NewGroupFromSelBtn" Classes="primary" IsVisible="False" Padding="16,9" FontSize="13.5" Content="＋  Crea gruppo" ToolTip.Tip="Nuovo gruppo con gli elementi scelti" />
+        <Button x:Name="AddToGroupBtn" Classes="accent" IsVisible="False" Padding="16,9" FontSize="13.5" ToolTip.ShowOnDisabled="True" ToolTip.Tip="Metti gli elementi scelti in un gruppo esistente">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <TextBlock Text="Aggiungi a gruppo" VerticalAlignment="Center" />
+            <TextBlock Text="▾" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
         <Button x:Name="CreateAreaBtn" Classes="accent" IsVisible="False" ToolTip.ShowOnDisabled="True" Padding="16,9" FontSize="13.5">
           <StackPanel Orientation="Horizontal" Spacing="7">
             <PathIcon Data="{StaticResource IconPolygon}" Width="14" Height="14" />
@@ -242,7 +294,7 @@
         </StackPanel>
       </Border>
       <!-- ═══ riquadri di destra: galleggiano sopra la mappa (la mappa resta a tutta larghezza) ═══ -->
-      <Border x:Name="RightPanel" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="360" Margin="0,12,12,12">
+      <Border x:Name="RightPanel" Classes="floating" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="360" Margin="0,12,12,64">
         <ScrollViewer Background="{x:Null}" VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="0" VerticalAlignment="Top">
             <!-- quando non c'è niente da aggiungere o modificare -->
@@ -258,7 +310,7 @@
               <StackPanel Spacing="8">
                 <TextBlock x:Name="EditLineTitle" Classes="sectionTitle" Text="Modifica linea" />
                 <TextBlock x:Name="EditLineInfo" Classes="note" />
-                <TextBlock x:Name="EditLineHelp" Classes="note" Text="Trascina un punto per spostarlo · clic su un punto e Canc (o «Elimina punto») per toglierlo · doppio clic sulla linea per inserirne uno nuovo. I punti verdi sono agganciati a un altro elemento e lo seguono." />
+                <TextBlock x:Name="EditLineHelp" Classes="note" Text="Trascina un punto per spostarlo · clic su un punto e Canc per toglierlo · doppio clic sulla linea per inserirne uno nuovo. I punti verdi sono agganciati a un altro elemento e lo seguono." />
                 <TextBlock x:Name="ExtendLabel" Classes="k" Text="Aggiungi punti" />
                 <Grid x:Name="ExtendRow" ColumnDefinitions="*,*" ColumnSpacing="8">
                   <Button x:Name="ExtendStartBtn" Classes="wide">
@@ -278,20 +330,12 @@
                 <CheckBox x:Name="EditFollowCheck" IsChecked="True" FontSize="12">
                   <TextBlock TextWrapping="Wrap" FontSize="12" Text="Segui il contorno tra due punti dello stesso edificio o elemento" />
                 </CheckBox>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Button x:Name="DeleteKeyBtn" Classes="danger">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
-                      <TextBlock Text="Elimina punto" VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Button>
-                  <Button x:Name="FinishEditBtn" Classes="accent">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Data="{StaticResource IconFloppy}" Width="13" Height="13" />
-                      <TextBlock Text="Salva" VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Button>
-                </StackPanel>
+                <Button x:Name="FinishEditBtn" Classes="wide accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconFloppy}" Width="13" Height="13" />
+                    <TextBlock Text="Salva" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
               </StackPanel>
             </Border>
 
@@ -300,11 +344,19 @@
               <StackPanel Spacing="8">
                 <DockPanel>
                   <Button x:Name="CloseAddBtn" DockPanel.Dock="Right" Classes="transparent" Content="✕" Padding="8,2" VerticalAlignment="Center" ToolTip.Tip="Chiudi" />
-                  <TextBlock Classes="sectionTitle" Text="Aggiungi elemento" VerticalAlignment="Center" />
+                  <WrapPanel Orientation="Horizontal" VerticalAlignment="Center" ItemSpacing="6">
+                    <TextBlock x:Name="AddTitle" Classes="sectionTitle" Text="Aggiungi elemento" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AddSep0" Classes="sectionTitle" Text="›" Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" IsVisible="False" />
+                    <Button x:Name="AddCrumbTypeBtn" Classes="link" IsVisible="False" VerticalAlignment="Center" Padding="0" FontSize="13.5" ToolTip.Tip="Torna alla scelta del tipo" />
+                    <TextBlock x:Name="AddSep1" Classes="sectionTitle" Text="›" Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" IsVisible="False" />
+                    <Button x:Name="AddCrumbKindBtn" Classes="link" IsVisible="False" VerticalAlignment="Center" Padding="0" FontSize="13.5" ToolTip.Tip="Torna a Tracciato / Poligono" />
+                    <TextBlock x:Name="AddSep2" Classes="sectionTitle" Text="›" Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" IsVisible="False" />
+                    <Button x:Name="AddCrumbSubBtn" Classes="link" IsVisible="False" VerticalAlignment="Center" Padding="0" FontSize="13.5" ToolTip.Tip="Torna a Bordo / Interasse / Riempimento" />
+                  </WrapPanel>
                 </DockPanel>
                 <StackPanel x:Name="AddBody" Spacing="8">
                   <!-- prima si sceglie solo tracciato o poligono -->
-                  <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                  <Grid x:Name="KindRow" ColumnDefinitions="*,*" ColumnSpacing="8">
                     <ToggleButton x:Name="KindTrackBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="10,9" ToolTip.Tip="L'elemento si sviluppa lungo una linea">
                       <StackPanel Orientation="Horizontal" Spacing="7">
                         <PathIcon Data="{StaticResource IconTrack}" Width="15" Height="15" />
@@ -318,12 +370,14 @@
                       </StackPanel>
                     </ToggleButton>
                   </Grid>
-                  <StackPanel x:Name="TrackOptions" Spacing="4" IsVisible="False">
-                    <RadioButton x:Name="RefBorderRadio" GroupName="ref" IsChecked="True" FontSize="12.5" Content="Bordo" ToolTip.Tip="L'elemento sta da un lato della linea (es. marciapiede lungo i muri)" />
-                    <RadioButton x:Name="RefAxisRadio" GroupName="ref" FontSize="12.5" Content="Interasse" ToolTip.Tip="L'elemento sta metà per parte (es. carreggiata, corsia doppia)" />
-                    <RadioButton x:Name="ModeFillRadio" GroupName="ref" FontSize="12.5" Content="Riempimento" ToolTip.Tip="Occupa lo spazio tra due elementi già disegnati" />
-                  </StackPanel>
-                  <Button x:Name="NewElemBtn" Classes="wide accent" Content="Disegna sulla mappa" />
+                  <!-- tracciato: la sotto-modalità si sceglie con un clic e il disegno parte subito -->
+                  <!-- scelta del tipo di elemento, prima di disegnare -->
+                  <Grid x:Name="TypeList" ColumnDefinitions="*,*" ColumnSpacing="6" RowSpacing="6" IsVisible="False" />
+                  <Grid x:Name="TrackOptions" ColumnDefinitions="*,*,*" ColumnSpacing="6" IsVisible="False">
+                    <Button x:Name="SubBorderBtn" Classes="wide accent" HorizontalContentAlignment="Center" Padding="6,9" Content="Bordo" ToolTip.Tip="L'elemento sta da un lato della linea (es. marciapiede lungo i muri)" />
+                    <Button x:Name="SubAxisBtn" Grid.Column="1" Classes="wide accent" HorizontalContentAlignment="Center" Padding="6,9" Content="Interasse" ToolTip.Tip="L'elemento sta metà per parte (es. carreggiata, corsia doppia)" />
+                    <Button x:Name="SubFillBtn" Grid.Column="2" Classes="wide accent" HorizontalContentAlignment="Center" Padding="6,9" Content="Riempimento" ToolTip.Tip="Occupa lo spazio tra due elementi già disegnati" />
+                  </Grid>
 
                   <StackPanel x:Name="DrawPanel" Spacing="6" IsVisible="False">
                     <TextBlock x:Name="TraceNote" Classes="note" Text="Doppio clic o Invio per finire · Backspace toglie l'ultimo punto · Esc annulla" />
@@ -333,9 +387,19 @@
                     </CheckBox>
                     <Button x:Name="MatchHostBtn" Classes="wide accent" IsVisible="False" />
                     <StackPanel x:Name="TracePanel" Orientation="Horizontal" Spacing="6">
-                      <Button x:Name="TraceUndoBtn" Content="Togli ultimo" />
-                      <Button x:Name="TraceFinishBtn" Content="Termina" Classes="accent" />
-                      <Button x:Name="TraceCancelBtn" Content="Annulla" />
+                      <Button x:Name="TraceUndoBtn">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Data="{StaticResource IconUndo}" Width="13" Height="13" />
+                          <TextBlock Text="Elimina ultimo punto" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                      <Button x:Name="TraceFinishBtn" Classes="accent">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Data="{StaticResource IconFloppy}" Width="13" Height="13" />
+                          <TextBlock Text="Salva" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                      <Button x:Name="TraceCancelBtn" Content="✕ Annulla" />
                     </StackPanel>
                   </StackPanel>
 
@@ -373,22 +437,27 @@
                   <TextBlock x:Name="OtherInfo" Classes="note" IsVisible="False" />
 
                   <StackPanel x:Name="CommitPanel" Spacing="8" IsVisible="False">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Button x:Name="FlipDraftBtn">
+                    <Grid x:Name="DraftBtnRow" ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                      <Button x:Name="FlipDraftBtn" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Data="{StaticResource IconSwap}" Width="14" Height="14" />
                           <TextBlock Text="Inverti lato" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <Button x:Name="EditDraftLineBtn">
+                      <Button x:Name="EditDraftLineBtn" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <PathIcon Data="{StaticResource IconPencil}" Width="13" Height="13" />
                           <TextBlock Text="Modifica" VerticalAlignment="Center" />
                         </StackPanel>
                       </Button>
-                      <Button x:Name="CancelDraftBtn" Content="✕ Annulla" />
-                    </StackPanel>
-                    <Button x:Name="CommitBtn" Content="Prosegui" Classes="wide accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                      <Button x:Name="CancelDraftBtn" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="✕ Annulla" />
+                    </Grid>
+                    <Button x:Name="CommitBtn" Classes="wide accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconFloppy}" Width="13" Height="13" />
+                        <TextBlock Text="Salva" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
                   </StackPanel>
                 </StackPanel>
               </StackPanel>
@@ -397,11 +466,23 @@
 
             <Border x:Name="SelPanel" Classes="card" IsVisible="False">
               <StackPanel Spacing="8">
-                <TextBlock Classes="sectionTitle" Text="Elemento selezionato" />
+                <TextBlock x:Name="SelTitle" Classes="sectionTitle" Text="Tracciato" />
                 <TextBox x:Name="NameBox" FontSize="13" FontWeight="SemiBold" />
+                <Grid x:Name="SelTypeRow">
+                  <ComboBox x:Name="SelTypeCombo" HorizontalAlignment="Stretch" FontSize="12.5" ToolTip.Tip="Tipo di elemento">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="local:TypeItem">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Border Width="12" Height="12" CornerRadius="2" Background="{Binding Swatch}" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </Grid>
                 <Border Classes="tabs">
                   <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="3">
-                    <Button x:Name="TabDatiBtn" Classes="tab on" Content="Dati" />
+                    <Button x:Name="TabDatiBtn" Classes="tab on" Content="Disegna" />
                     <Button x:Name="TabOptBtn" Grid.Column="1" Classes="tab" Content="Opzioni" />
                     <Button x:Name="TabVarBtn" Grid.Column="2" Classes="tab">
                       <TextBlock x:Name="TabVarText" Text="Variatori (0)" />
@@ -412,15 +493,11 @@
 
                 <!-- Dati -->
                 <StackPanel x:Name="TabDati" Spacing="8">
-                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <TextBlock Classes="k" Text="Tipo" VerticalAlignment="Center" />
-                    <ComboBox x:Name="SelTypeCombo" Grid.Column="1" HorizontalAlignment="Stretch" FontSize="12.5" />
-                  </Grid>
                   <Grid x:Name="SelGroupRow" ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                    <TextBlock Classes="k" Text="Blocco" VerticalAlignment="Center" />
+                    <TextBlock Classes="k" Text="Gruppo" VerticalAlignment="Center" />
                     <ComboBox x:Name="SelGroupCombo" Grid.Column="1" HorizontalAlignment="Stretch" FontSize="12.5" />
                   </Grid>
-                  <TextBlock x:Name="AttachText" Classes="note" />
+                  <TextBlock x:Name="AttachText" Classes="note" IsVisible="False" />
                   <TextBlock x:Name="SelError" Classes="note" Foreground="{StaticResource ErrorBrush}" IsVisible="False" />
 
                   <StackPanel x:Name="SelWidthPanel" Spacing="6">
@@ -436,22 +513,23 @@
                       <TextBlock Classes="k" TextWrapping="Wrap" Text="Ignora irregolarità (m)" VerticalAlignment="Center" />
                       <NumericUpDown x:Name="SelSmoothBox" Grid.Column="1" Width="110" Increment="0.1" FormatString="0.00" Minimum="0" Maximum="10" FontSize="12" />
                     </Grid>
-                    <Button x:Name="FlipSelBtn">
+                  </StackPanel>
+
+                  <!-- inverti lato e modifica linea sulla stessa riga, a tutta larghezza -->
+                  <Grid x:Name="LineBtns" ColumnDefinitions="*,*" ColumnSpacing="6">
+                    <Button x:Name="FlipSelBtn" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                       <StackPanel Orientation="Horizontal" Spacing="6">
                         <PathIcon Data="{StaticResource IconSwap}" Width="14" Height="14" />
                         <TextBlock Text="Inverti lato" VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
-                  </StackPanel>
-
-                  <StackPanel x:Name="LineBtns" Orientation="Horizontal" Spacing="6">
-                    <Button x:Name="EditSelLineBtn">
+                    <Button x:Name="EditSelLineBtn" Grid.Column="1" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
                       <StackPanel Orientation="Horizontal" Spacing="6">
                         <PathIcon Data="{StaticResource IconPencil}" Width="13" Height="13" />
                         <TextBlock Text="Modifica la linea" VerticalAlignment="Center" />
                       </StackPanel>
                     </Button>
-                  </StackPanel>
+                  </Grid>
                   <TextBlock x:Name="SelRangeLabel" Classes="k" Text="Tratto sulla linea di aggancio (m)" />
                   <Grid x:Name="SelRangeGrid" ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="6">
                     <TextBlock Classes="k" Text="Da" VerticalAlignment="Center" />
@@ -461,26 +539,25 @@
                   </Grid>
 
 
-                  <StackPanel x:Name="AlongPanel" Spacing="6" Margin="0,4,0,0">
-                    <TextBlock Classes="k" Text="Nuovo elemento affiancato, lungo come questo" />
-                    <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
-                      <Button x:Name="AddLeftBtn" Classes="wide" Content="◀ Aggiungi a sinistra" />
-                      <Button x:Name="AddRightBtn" Grid.Column="1" Classes="wide" Content="Aggiungi a destra ▶" />
-                    </Grid>
-                    <TextBlock Classes="note" Text="Destra e sinistra guardando la linea dall'inizio verso la fine (le frecce sulla mappa)." />
-                  </StackPanel>
-                  <Button x:Name="ToPolygonBtn" ToolTip.Tip="Trasforma l'elemento in un poligono con il contorno attuale (non si può tornare indietro)">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Data="{StaticResource IconPolygon}" Width="13" Height="13" />
-                      <TextBlock Text="Converti in poligono" VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Button>
-                  <Button x:Name="DeleteBtn">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
-                      <TextBlock Text="Elimina elemento" VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Button>
+                  <Grid x:Name="AlongPanel" ColumnDefinitions="*,*" ColumnSpacing="6" ToolTip.Tip="Nuovo elemento affiancato, lungo come questo (destra e sinistra guardando la linea dall'inizio verso la fine)">
+                    <Button x:Name="AddLeftBtn" Classes="wide" Content="◀ Aggiungi a sinistra" />
+                    <Button x:Name="AddRightBtn" Grid.Column="1" Classes="wide" Content="Aggiungi a destra ▶" />
+                  </Grid>
+                  <!-- converti ed elimina sulla stessa riga, a tutta larghezza -->
+                  <Grid x:Name="EndBtns" ColumnDefinitions="*,*" ColumnSpacing="6">
+                    <Button x:Name="ToPolygonBtn" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Trasforma l'elemento in un poligono con il contorno attuale (non si può tornare indietro)">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconPolygon}" Width="13" Height="13" />
+                        <TextBlock Text="Converti in poligono" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Button x:Name="DeleteBtn" Grid.Column="1" Classes="wide" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
+                        <TextBlock Text="Elimina elemento" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
                 </StackPanel>
 
                 <!-- Variatori di sezione -->
@@ -509,6 +586,10 @@
                       </Grid>
                       <TextBlock x:Name="StallInfo" Classes="note" />
                     </StackPanel>
+                    <Grid x:Name="SepPanel" ColumnDefinitions="*,*" ColumnSpacing="6">
+                      <ToggleButton x:Name="MixedBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Mista" ToolTip.Tip="Bici e pedoni sullo stesso spazio" />
+                      <ToggleButton x:Name="SeparatedBtn" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Separata" ToolTip.Tip="Striscia continua a metà: da una parte le bici, dall'altra i pedoni" />
+                    </Grid>
                     <Grid x:Name="HeightPanel" ColumnDefinitions="*,Auto" ColumnSpacing="10">
                       <TextBlock Classes="k" Text="Altezza (m)" VerticalAlignment="Center" />
                       <NumericUpDown x:Name="HeightBox" Grid.Column="1" Width="120" Minimum="0" Maximum="2" Increment="0.01" FormatString="0.00" FontSize="12" />
@@ -560,23 +641,60 @@
           </StackPanel>
         </ScrollViewer>
       </Border>
+      <!-- in basso a destra: penna e testo per disegnare e scrivere note sulla mappa -->
+      <StackPanel x:Name="NoteTools" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,14,14" Spacing="6" IsVisible="False">
+        <Border x:Name="NoteBar" Background="#FF262B33" BorderBrush="{StaticResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="8,6" IsVisible="False" HorizontalAlignment="Right">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <StackPanel x:Name="NoteColors" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" />
+            <Border Width="1" Background="{StaticResource CardBorder}" />
+            <StackPanel x:Name="NoteSizes" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" />
+            <Border Width="1" Background="{StaticResource CardBorder}" />
+            <ToggleButton x:Name="EraserBtn" Classes="maptool" MinHeight="28" MinWidth="32" Padding="7,5" ToolTip.Tip="Gomma: clic su un disegno o un testo per cancellarlo">
+              <PathIcon Data="{StaticResource IconEraser}" Width="15" Height="15" />
+            </ToggleButton>
+          </StackPanel>
+        </Border>
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+          <!-- vista: adatta e ruota -->
+          <StackPanel x:Name="ViewBtns" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="False">
+            <Button x:Name="ZoomBtn" MinHeight="36" VerticalContentAlignment="Center" Content="⤢  Adatta vista" Classes="mapbtn" />
+            <Button x:Name="RotPlusBtn" MinHeight="36" VerticalContentAlignment="Center" Content="⟲ +5°" Classes="mapbtn" ToolTip.Tip="Ruota il disegno di 5° in senso antiorario" />
+            <Button x:Name="RotMinusBtn" MinHeight="36" VerticalContentAlignment="Center" Content="⟳ −5°" Classes="mapbtn" ToolTip.Tip="Ruota il disegno di 5° in senso orario" />
+            <Button x:Name="RotResetBtn" MinHeight="36" VerticalContentAlignment="Center" Classes="mapbtn" IsVisible="False" ToolTip.Tip="Torna con il nord in alto" />
+          </StackPanel>
+          <Border Width="6" />
+          <ToggleButton x:Name="PenBtn" Classes="maptool" Padding="10,7" ToolTip.Tip="Penna: disegna a mano libera sulla mappa">
+            <PathIcon Data="{StaticResource IconPencil}" Width="16" Height="16" />
+          </ToggleButton>
+          <ToggleButton x:Name="TextBtn" Classes="maptool" Padding="10,5" ToolTip.Tip="Testo: clic sulla mappa per scrivere una nota">
+            <TextBlock Text="T" FontSize="16" FontWeight="Bold" FontFamily="Georgia, serif" />
+          </ToggleButton>
+        </StackPanel>
+      </StackPanel>
+
       <!-- sezione aperta: disegno in basso, sopra la mappa -->
       <Border x:Name="SectionPanel" Classes="floating" VerticalAlignment="Bottom" Height="310" Margin="12,0,12,12" IsVisible="False">
         <Border Classes="card" Margin="0" Padding="14,12">
           <DockPanel>
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,10">
               <TextBox x:Name="SectionNameBox" Width="190" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
               <TextBlock x:Name="SectionInfo" Grid.Column="1" Classes="note" VerticalAlignment="Center" Margin="6,0,0,0" />
-              <Button x:Name="FlipSectionBtn" Grid.Column="2" ToolTip.Tip="Guarda la sezione dall'altro lato della linea">
+              <Button x:Name="SaveSectionPngBtn" Grid.Column="2" ToolTip.Tip="Salva la sezione come immagine PNG (disegno e legenda con le misure)">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource IconFloppy}" Width="13" Height="13" />
+                  <TextBlock Text="Salva PNG" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="FlipSectionBtn" Grid.Column="3" ToolTip.Tip="Guarda la sezione dall'altro lato della linea">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <TextBlock Text="⇄" VerticalAlignment="Center" />
                   <TextBlock Text="Inverti verso" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button x:Name="DeleteSectionBtn" Grid.Column="3" ToolTip.Tip="Elimina la sezione">
+              <Button x:Name="DeleteSectionBtn" Grid.Column="4" ToolTip.Tip="Elimina la sezione">
                 <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
               </Button>
-              <Button x:Name="CloseSectionBtn" Grid.Column="4" Classes="transparent" Content="✕" Padding="8,2" ToolTip.Tip="Chiudi" />
+              <Button x:Name="CloseSectionBtn" Grid.Column="5" Classes="transparent" Content="✕" Padding="8,2" ToolTip.Tip="Chiudi" />
             </Grid>
             <Grid ColumnDefinitions="*,340" ColumnSpacing="14">
               <c:SectionView x:Name="SectionDrawing" />

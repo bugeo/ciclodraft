@@ -154,6 +154,24 @@
       <Setter Property="BoxShadow" Value="0 6 24 0 #50000000" />
     </Style>
     <!-- pulsanti sopra la mappa (chiara): fondo scuro pieno -->
+    <Style Selector="ToggleButton.maptool">
+      <Setter Property="Background" Value="#FF262B33" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+      <Setter Property="BorderBrush" Value="{StaticResource CardBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="MinWidth" Value="40" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ToggleButton.maptool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="#FF343A44" />
+      <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    </Style>
+    <Style Selector="ToggleButton.maptool:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="#FF10141A" />
+    </Style>
     <Style Selector="Button.mapbtn">
       <Setter Property="Background" Value="#FF262B33" />
       <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />

@@ -45,6 +45,101 @@ public class MapCanvas : Control
     /// <summary>Icone dei fotoinserimenti sulla mappa (menu Visualizza).</summary>
     public bool ShowPhotoIcons { get => _showPhotoIcons; set { _showPhotoIcons = value; InvalidateVisual(); } }
     /// <summary>Etichette con il nome degli elementi sulla mappa (menu Visualizza).</summary>
+    // ───────────── note: penna e testo ─────────────
+
+    public enum NoteTool { None, Pen, Text, Eraser }
+    NoteTool _tool;
+    /// <summary>Strumento delle note attivo (penna, testo, gomma) o nessuno.</summary>
+    public NoteTool Tool { get => _tool; set { _tool = value; _stroke = null; Cursor = value == NoteTool.None ? Cursor.Default : new Cursor(value == NoteTool.Text ? StandardCursorType.Ibeam : StandardCursorType.Cross); InvalidateVisual(); } }
+    public string NoteColor = "#E53935";
+    public double PenSize = 4;
+    public double TextSize = 16;
+    /// <summary>Disegno per la stampa (PDF): fondo bianco, niente selezioni, maniglie, note e scala.</summary>
+    public bool Print;
+    /// <summary>In stampa: sezioni e fotoinserimenti da mostrare (null = tutti).</summary>
+    public HashSet<CrossSection>? PrintSections;
+    public HashSet<PhotoInsertRef>? PrintPhotos;
+    bool _showGroups = true;
+    /// <summary>Bordi colorati degli elementi dei gruppi (pulsante «Gruppi» in alto). Nella modifica di un gruppo si vedono sempre.</summary>
+    public bool ShowGroups { get => _showGroups; set { _showGroups = value; InvalidateVisual(); } }
+    bool _showNotes = true;
+    public bool ShowNotes { get => _showNotes; set { _showNotes = value; InvalidateVisual(); } }
+    List<V2>? _stroke;
+    /// <summary>Clic con lo strumento testo: dove scrivere (mondo, schermo) ed eventuale nota esistente da modificare.</summary>
+    public event Action<V2, Point, Annotation?>? TextRequested;
+
+    Annotation? HitNote(Point sp)
+    {
+        var ed = _ed; if (ed == null) return null;
+        for (int k = ed.Project.Annotations.Count - 1; k >= 0; k--)
+        {
+            var a = ed.Project.Annotations[k];
+            if (a.IsText)
+            {
+                if (a.Pts.Count == 0) continue;
+                var ft = NoteText(a);
+                var p = ToScreen(a.Pts[0]);
+                if (new Rect(p.X - 4, p.Y - 4, ft.Width + 8, ft.Height + 8).Contains(sp)) return a;
+            }
+            else
+                for (int i = 0; i + 1 < a.Pts.Count; i++)
+                {
+                    var p1 = ToScreen(a.Pts[i]); var p2 = ToScreen(a.Pts[i + 1]);
+                    var d = p2 - p1; double L2 = d.X * d.X + d.Y * d.Y;
+                    double t = L2 < 1e-9 ? 0 : Math.Clamp(((sp.X - p1.X) * d.X + (sp.Y - p1.Y) * d.Y) / L2, 0, 1);
+                    var q = p1 + d * t;
+                    if (Math.Sqrt((sp.X - q.X) * (sp.X - q.X) + (sp.Y - q.Y) * (sp.Y - q.Y)) < a.Size / 2 + 5) return a;
+                }
+        }
+        return null;
+    }
+
+    static FormattedText NoteText(Annotation a) =>
+        new(a.Text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold), a.Size, new SolidColorBrush(Color.Parse(a.Color)));
+
+    void DrawNotes(DrawingContext ctx)
+    {
+        var ed = _ed; if (ed == null || !_showNotes) return;
+        void Stroke(List<V2> pts, string col, double size)
+        {
+            if (pts.Count == 0) return;
+            var pen = new Pen(new SolidColorBrush(Color.Parse(col)), size, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+            if (pts.Count == 1) { var p = ToScreen(pts[0]); ctx.DrawEllipse(pen.Brush, null, p, size / 2, size / 2); return; }
+            ctx.DrawGeometry(null, pen, ScreenLine(pts));
+        }
+        var halo = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255));
+        foreach (var a in ed.Project.Annotations)
+        {
+            if (!a.IsText) { Stroke(a.Pts, a.Color, a.Size); continue; }
+            if (a.Pts.Count == 0 || string.IsNullOrEmpty(a.Text)) continue;
+            var ft = NoteText(a); var p = ToScreen(a.Pts[0]);
+            ctx.FillRectangle(halo, new Rect(p.X - 3, p.Y - 1, ft.Width + 6, ft.Height + 2), 3);
+            ctx.DrawText(ft, p);
+        }
+        if (_stroke != null) Stroke(_stroke, NoteColor, PenSize);
+    }
+
+    /// <summary>Clic con uno strumento delle note; true se il clic è stato usato.</summary>
+    bool NotePressed(PointerPressedEventArgs e, Point sp, V2 w)
+    {
+        var ed = _ed; if (ed == null || _tool == NoteTool.None || ed.Mode != Mode.Idle) return false;
+        switch (_tool)
+        {
+            case NoteTool.Pen:
+                _stroke = new List<V2> { w }; e.Pointer.Capture(this); InvalidateVisual(); return true;
+            case NoteTool.Text:
+                var hit = HitNote(sp);
+                if (hit is { IsText: true }) TextRequested?.Invoke(hit.Pts[0], ToScreen(hit.Pts[0]), hit);
+                else TextRequested?.Invoke(w, sp, null);
+                return true;
+            case NoteTool.Eraser:
+                if (HitNote(sp) is { } er) { ed.Project.Annotations.Remove(er); ed.NotifyAll(); }
+                return true;
+        }
+        return false;
+    }
+
     public bool ShowLabels { get => _showLabels; set { _showLabels = value; InvalidateVisual(); } }
 
     const double TolPx = 9;
@@ -79,9 +174,11 @@ public class MapCanvas : Control
         ElementType.Corsia => (B("#93A3B8", alpha), B("#56667A")),
         ElementType.Parcheggio => (B("#6E9BC9", alpha), B("#3C6A98")),
         ElementType.Aiuola => (B("#86B068", alpha), B("#527B37")),
+        ElementType.Ciclopedonale => (B("#C99A7C", alpha), B("#8A5E43")),
         ElementType.Separatore => (B("#F2C318", alpha), B("#A78300")),
         ElementType.CorsiaCiclabile => (B("#E8906F", alpha), B("#B0553A")),
         ElementType.CorsiaDoppia => (B("#7D8696", alpha), B("#4A5260")),
+        ElementType.Indefinito => (B("#C9C2D6", alpha), B("#7A6F8C")),
         _ => (B("#999999", alpha), B("#555555"))
     };
 
@@ -89,7 +186,7 @@ public class MapCanvas : Control
     {
         ElementType.Marciapiede => "#BBA781", ElementType.Ciclabile => "#D6603F", ElementType.Carreggiata => "#6B7280",
         ElementType.Corsia => "#93A3B8", ElementType.Parcheggio => "#6E9BC9", ElementType.Aiuola => "#86B068",
-        ElementType.Separatore => "#F2C318", ElementType.CorsiaCiclabile => "#E8906F", ElementType.CorsiaDoppia => "#7D8696", _ => "#999999"
+        ElementType.Separatore => "#F2C318", ElementType.CorsiaCiclabile => "#E8906F", ElementType.CorsiaDoppia => "#7D8696", ElementType.Indefinito => "#C9C2D6", ElementType.Ciclopedonale => "#C99A7C", _ => "#999999"
     };
 
     StreamGeometry? _gBuild, _gSide, _gOther;
@@ -217,6 +314,8 @@ public class MapCanvas : Control
         return true;
     }
 
+    public (double cx, double cy, double s) View { get => (_cx, _cy, _s); set { (_cx, _cy, _s) = value; InvalidateVisual(); ViewChanged?.Invoke(); } }
+
     public void ZoomTo(BBox b)
     {
         if (b.IsEmpty || Bounds.Width < 10) { _cx = 0; _cy = 0; _s = 2; InvalidateVisual(); return; }
@@ -267,19 +366,26 @@ public class MapCanvas : Control
         return g;
     }
 
+    readonly Dictionary<string, IBrush> _groupBrushes = new();
+    IBrush GroupBrush(string hex)
+    {
+        if (!_groupBrushes.TryGetValue(hex, out var b)) { try { b = B(hex); } catch { b = B("#E6194B"); } _groupBrushes[hex] = b; }
+        return b;
+    }
+
     Pen P(IBrush b, double px, IDashStyle? dash = null, PenLineCap cap = PenLineCap.Round) =>
         new(b, px / _s, dash, cap, PenLineJoin.Round);
 
     public override void Render(DrawingContext ctx)
     {
         var r = new Rect(Bounds.Size);
-        ctx.FillRectangle(BgBrush, r);
+        ctx.FillRectangle(Print ? Brushes.White : BgBrush, r);
         var ed = _ed;
         if (ed == null) return;
         if (_bgDirty) BuildBackground();
 
         // sfondo: immagine pronta se la vista è la stessa; altrimenti quella vecchia scalata e spostata, e se ne prepara una nuova
-        if (NoBgCache) { DrawBackground(ctx); goto elements; }
+        if (NoBgCache || Print) { DrawBackground(ctx); goto elements; }
         bool sameView = _bgBmpValid && _bgBmp != null && _bgS == _s && _bgCx == _cx && _bgCy == _cy && _bgRot == RotDeg && _bgSize == Bounds.Size;
         if (!_bgBmpValid || _bgBmp == null || _bgSize != Bounds.Size) { RebuildBackgroundBitmap(); sameView = _bgBmp != null; }
         if (_bgBmp != null)
@@ -324,7 +430,13 @@ public class MapCanvas : Control
                 }
             }
 
-            if (ed.Preview is { Error: null, Polygon.Count: >= 3 } pv)
+            // bordo colorato degli elementi che stanno in un blocco (più spesso per il blocco a cui si stanno aggiungendo)
+            if ((ShowGroups || ed.AssignGroup != 0) && !Print)
+            foreach (var e in ed.Project.Shown)
+                if (e.Group != 0 && e.Polygon.Count >= 3 && ed.FindGroup(e.Group) is { } grp)
+                    ctx.DrawGeometry(null, P(GroupBrush(grp.Color), grp.Id == ed.AssignGroup ? 4 : 2.6), Line(e.Polygon, true));
+
+            if (!Print && ed.Preview is { Error: null, Polygon.Count: >= 3 } pv)
             {
                 var (f, s) = Colors(pv.Type, 150);
                 ctx.DrawGeometry(f, P(s, 1.5, new DashStyle(new double[] { 3, 2 }, 0), PenLineCap.Flat), Line(pv.Polygon, true, true));
@@ -339,6 +451,7 @@ public class MapCanvas : Control
                     ctx.DrawGeometry(null, P(RoadEdge, 1.1, new DashStyle(new double[] { 6, 4 }, 0), PenLineCap.Flat), Line(e.Points));
             }
 
+            if (!Print) {
             // Bordo sotto il puntatore
             if (ed.Mode is Mode.PickBase or Mode.PickOther || (ed.Mode == Mode.PickRange && ed.RangeFixed))
                 if (ed.HoverEdge is { } he && ed.Project.GetEdge(he) is { } hl)
@@ -354,7 +467,7 @@ public class MapCanvas : Control
                     ctx.DrawGeometry(null, P(Hover, 4), Line(ol));
             }
 
-            foreach (var ms in ed.MultiSel)
+            foreach (var ms in ed.MultiSel.Concat(ed.GroupSel))
                 if (ms.Polygon.Count >= 3) ctx.DrawGeometry(MultiFill, P(SelBrush, 2.4), Line(ms.Polygon, true, true));
             foreach (var part in ed.AreaParts)
                 ctx.DrawGeometry(AreaFill, P(AreaStroke, 1.2, new DashStyle(new double[] { 4, 3 }, 0), PenLineCap.Flat), Line(part, true, true));
@@ -374,7 +487,10 @@ public class MapCanvas : Control
                 ctx.DrawGeometry(null, P(SelBrush, 2.6), Line(ed.TracePts));
                 ctx.DrawGeometry(null, P(SelBrush, 1.4, new DashStyle(new double[] { 3, 3 }, 0), PenLineCap.Flat), Line(pts.Skip(pts.Count - 2).ToList()));
             }
+            }
         }
+
+        if (!Print) DrawNotes(ctx);
 
         // ── sovrapposizioni in coordinate schermo ──
         foreach (var e in ed.Project.Edges)
@@ -387,6 +503,7 @@ public class MapCanvas : Control
 
         if (ShowPhotoIcons) DrawPhotoIcons(ctx, ed);
         DrawSections(ctx, ed);
+        if (Print) return;
 
         // elemento tracciato selezionato: verso della linea (frecce, inizio/fine) e lati destro/sinistro,
         // per «Aggiungi a destra / a sinistra»
@@ -537,7 +654,7 @@ public class MapCanvas : Control
     {
         foreach (var r in ed.Project.Photos)
         {
-            if (r.Cam is not { } cw) continue;
+            if (r.Cam is not { } cw || PrintPhotos != null && !PrintPhotos.Contains(r)) continue;
             var c = ToScreen(cw);
             double yaw = r.Yaw * Math.PI / 180, half = Math.Clamp(r.HFov, 10, 150) * Math.PI / 360;
             Vector Dir(double a) => ScreenDir(new V2(Math.Cos(a), Math.Sin(a)));
@@ -577,6 +694,7 @@ public class MapCanvas : Control
     {
         foreach (var s in ed.Project.Sections)
         {
+            if (PrintSections != null && !PrintSections.Contains(s)) continue;
             bool sel = s == ed.SelectedSection;
             var a = ToScreen(s.A); var b = ToScreen(s.B);
             double w = sel ? 3.2 : 2.2;
@@ -757,6 +875,7 @@ public class MapCanvas : Control
             _panLast = sp; e.Pointer.Capture(this); return;
         }
         if (!pt.Properties.IsLeftButtonPressed) return;
+        if (NotePressed(e, sp, w)) return;
 
         switch (ed.Mode)
         {
@@ -797,6 +916,7 @@ public class MapCanvas : Control
                 break;
             }
             case Mode.Idle:
+                if (ed.AssignGroup != 0) { ed.AssignAt(w); return; }   // aggiunta di elementi a un blocco
                 if (HitPhoto(sp) is { } ph) { PhotoClicked?.Invoke(ph); return; }
                 if (ed.HitSectionEnd(w, Tol) is var se and >= 0) { _dragSecEnd = se; e.Pointer.Capture(this); return; }
                 if (ed.HitSection(w, Tol) is { } sec) { ed.SelectSection(sec); return; }
@@ -809,8 +929,13 @@ public class MapCanvas : Control
                     return;
                 }
                 if (e.ClickCount >= 2 && ed.TryAddCp(w, Tol)) { _dragging = true; e.Pointer.Capture(this); return; }
-                if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-                { ed.PickAt(w, true); return; }
+                // Maiusc o Ctrl (⌘) + clic: sugli elementi disegnati si scelgono per i gruppi («Crea gruppo», «Aggiungi a gruppo»),
+                // sui poligoni della mappa (aree senza elementi) si scelgono le aree per «Crea elemento»
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta))
+                {
+                    if (ed.ElementAt(w) != null) ed.ToggleGroupSel(w); else ed.PickAt(w, true);
+                    return;
+                }
                 if (e.ClickCount >= 2)
                 {
                     // doppio clic su un elemento: modifica della sua linea o del suo contorno; altrove: scelta di un'area
@@ -833,6 +958,11 @@ public class MapCanvas : Control
         ed.Mouse = w;
         PointerWorldMoved?.Invoke(w);
 
+        if (_stroke != null)
+        {
+            if (V2.Dist(_stroke[^1], w) * _s > 2) { _stroke.Add(w); InvalidateVisual(); }
+            return;
+        }
         if (_panLast is { } last)
         {
             var d = sp - last;
@@ -877,6 +1007,12 @@ public class MapCanvas : Control
     {
         base.OnPointerReleased(e);
         _panLast = null;
+        if (_stroke != null && _ed != null)
+        {
+            var st = _stroke; _stroke = null;
+            _ed.Project.Annotations.Add(new Annotation { Pts = PL.Simplify(st, 0.5 / _s), Color = NoteColor, Size = PenSize });
+            _ed.NotifyAll();
+        }
         if (_dragging && _ed != null) { _ed.DragCp = -1; _ed.NotifyAll(); }
         _dragging = false;
         if (_dragVar is { } dv && _ed != null) _ed.MoveVarHandle(dv.i, dv.end, ToWorld(e.GetPosition(this)), true);

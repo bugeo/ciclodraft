@@ -26,6 +26,9 @@ public partial class Editor
     public List<SnapInfo?> TraceSnaps = new();
     public List<bool> TraceAuto = new();
     public bool SnapOn = true, FollowOn = true;
+    /// <summary>Finito il disegno l'elemento si salva subito (larghezza predefinita, lato proposto): niente passaggio intermedio.
+    /// Il programma lo attiva; il server MCP e le prove lo lasciano spento per impostare larghezza e lato prima di salvare.</summary>
+    public bool AutoCommit;
 
     // Nuovo elemento (bozza)
     public ElementType DraftType = ElementType.Marciapiede;
@@ -491,10 +494,11 @@ public partial class Editor
         DraftSide = DraftCentered ? 1 : SuggestSide();
         BuildPreview();
         Message = DraftPolygon
-            ? $"Poligono di {Preview?.Metrics.Area ?? 0:0.00} m² (perimetro {Preview?.Metrics.Length ?? 0:0.00} m). Premi «Prosegui» per confermarlo."
+            ? $"Poligono di {Preview?.Metrics.Area ?? 0:0.00} m² (perimetro {Preview?.Metrics.Length ?? 0:0.00} m). Premi «Salva» per confermarlo."
             : DraftCentered
-            ? $"Interasse di {PL.Length(edge.Points):0.00} m. Imposta la larghezza (metà per parte) e premi «Prosegui»."
-            : $"Bordo di {PL.Length(edge.Points):0.00} m. Imposta la larghezza, controlla da che parte va («Inverti lato») e premi «Prosegui».";
+            ? $"Interasse di {PL.Length(edge.Points):0.00} m. Imposta la larghezza (metà per parte) e premi «Salva»."
+            : $"Bordo di {PL.Length(edge.Points):0.00} m. Imposta la larghezza, controlla da che parte va («Inverti lato») e premi «Salva».";
+        if (AutoCommit && Preview is { Error: null }) { Commit(); return; }
         NotifyAll();
     }
 
@@ -809,7 +813,8 @@ public partial class Editor
                 {
                     DraftOther = hit.Value.r;
                     BuildPreview();
-                    Message = Preview?.Error ?? $"Anteprima tra {Project.EdgeName(DraftBase!.Value)} e {Project.EdgeName(DraftOther.Value)}. Premi «Prosegui».";
+                    Message = Preview?.Error ?? $"Anteprima tra {Project.EdgeName(DraftBase!.Value)} e {Project.EdgeName(DraftOther.Value)}. Premi «Salva».";
+                    if (AutoCommit && Preview is { Error: null }) { Commit(); break; }
                     NotifyAll();
                 }
                 break;
@@ -863,7 +868,7 @@ public partial class Editor
             Mode = Mode.SetWidth;
             DraftSide = SuggestSide();
             BuildPreview();
-            Message = "Imposta la larghezza e controlla l'anteprima. «Inverti lato» se l'elemento va dall'altra parte. Poi «Prosegui».";
+            Message = "Imposta la larghezza e controlla l'anteprima. «Inverti lato» se l'elemento va dall'altra parte. Poi «Salva».";
         }
         else
         {
@@ -1103,6 +1108,16 @@ public partial class Editor
     {
         if (Selected is not { Type: ElementType.Parcheggio } e) return;
         e.StallLines = on; e.StallLength = Math.Clamp(Math.Round(length, 2), 0.5, 50);
+        Project.Regenerate();
+        Message = "";
+        NotifyAll();
+    }
+
+    /// <summary>Ciclopedonale: bici e pedoni separati (striscia continua a metà) oppure percorso misto.</summary>
+    public void SetSelectedSeparated(bool on)
+    {
+        if (Selected is not { Type: ElementType.Ciclopedonale } e || e.Separated == on) return;
+        e.Separated = on; e.DividerStyle = DividerStyle.Continua;
         Project.Regenerate();
         Message = "";
         NotifyAll();

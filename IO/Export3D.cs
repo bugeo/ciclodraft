@@ -610,12 +610,12 @@ public static class Export3D
     static void BuildElement(Node n, Element e, NtsGeometry geom, Export3DOptions o, GpkgData? data)
     {
         double hc = e.HasHeight ? e.Height : o.CurbHeight;
-        bool raised = e.Type is ElementType.Marciapiede or ElementType.Aiuola
+        bool raised = e.Type is ElementType.Marciapiede or ElementType.Aiuola or ElementType.Ciclopedonale
                       || (e.Type == ElementType.Ciclabile && o.RaisedBikeLane);
         var surface = e.Type switch
         {
             ElementType.Marciapiede => Marciapiede,
-            ElementType.Ciclabile or ElementType.CorsiaCiclabile => Ciclabile,
+            ElementType.Ciclabile or ElementType.CorsiaCiclabile or ElementType.Ciclopedonale => Ciclabile,
             ElementType.Separatore => SegnaleticaGialla,
             ElementType.Aiuola => Verde,
             ElementType.Parcheggio => Parcheggio,

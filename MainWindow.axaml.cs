@@ -31,6 +31,11 @@ public class ElementRow : System.ComponentModel.INotifyPropertyChanged
     }
 }
 public record TotalRow(string Label, string Value, IBrush Swatch);
+/// <summary>Voce della tendina dei tipi: nome e quadratino del colore.</summary>
+public record TypeItem(string Label, IBrush Swatch)
+{
+    public static TypeItem Of(ElementType t) => new(Element.TypeLabel(t), MapCanvas.Colors(t, 255).fill);
+}
 
 public partial class MainWindow : Window
 {
@@ -61,7 +66,7 @@ public partial class MainWindow : Window
                 : "";
         };
 
-        TypeCombo.ItemsSource = Enum.GetValues<ElementType>().Select(Element.TypeLabel).ToList();
+        TypeCombo.ItemsSource = Enum.GetValues<ElementType>().Where(t => t != ElementType.Indefinito).Select(Element.TypeLabel).ToList();
         TypeCombo.SelectedIndex = -1;
         TypeCombo.SelectionChanged += (_, _) =>
         {
@@ -72,8 +77,28 @@ public partial class MainWindow : Window
             if (_ed.Mode != Mode.Idle) Avalonia.Threading.Dispatcher.UIThread.Post(() => { _ed.SetDraftType(t); UpdatePanels(); });
             else UpdatePanels();
         };
-        SelTypeCombo.ItemsSource = Enum.GetValues<ElementType>().Select(Element.TypeLabel).ToList();
+        SelTypeCombo.ItemsSource = Element.Choosable.Select(TypeItem.Of).ToList();
+        foreach (var tb in new[] { GroupSearch, PhotoSearch, SectionSearch, ElemSearch })
+            tb.TextChanged += (_, _) => UpdatePanels();
+        LTabGroups.Click += (_, _) => SetLeftTab(0);
+        LTabPhotos.Click += (_, _) => SetLeftTab(1);
+        LTabSections.Click += (_, _) => SetLeftTab(2);
+        LTabElements.Click += (_, _) => SetLeftTab(3);
         NewGroupBtn.Click += (_, _) => { _ed.NewGroup(); _groupSig = ""; _focusGroup = true; };
+        SaveGroupBtn.Click += (_, _) => { if (_ed.FindGroup(_ed.AssignGroup) is { } sg) _ed.ToggleAssign(sg); Map.Focus(); };
+        NewGroupFromSelBtn.Click += (_, _) => { _leftTab = 0; _ed.GroupFromSelection(); _groupSig = ""; _focusGroup = true; };
+        AddToGroupBtn.Click += (_, _) =>
+        {
+            var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+            foreach (var g in _ed.Project.Groups)
+            {
+                var gg = g;
+                var mi = new MenuItem { Header = g.Name, Icon = new Border { Width = 12, Height = 12, CornerRadius = new Avalonia.CornerRadius(6), Background = new SolidColorBrush(Color.Parse(g.Color)) } };
+                mi.Click += (_, _) => { _ed.AddSelectionToGroup(gg); Map.Focus(); };
+                menu.Items.Add(mi);
+            }
+            menu.ShowAt(AddToGroupBtn);
+        };
         SelGroupCombo.SelectionChanged += (_, _) =>
         {
             if (_updating || SelGroupCombo.SelectedIndex < 0) return;
@@ -84,7 +109,8 @@ public partial class MainWindow : Window
         SelTypeCombo.SelectionChanged += (_, _) =>
         {
             if (_updating || SelTypeCombo.SelectedIndex < 0) return;
-            var t = (ElementType)SelTypeCombo.SelectedIndex;
+            if (SelTypeCombo.SelectedIndex >= Element.Choosable.Length) return;   // «Indefinito»
+            var t = Element.Choosable[SelTypeCombo.SelectedIndex];
             // applicato dopo che la tendina si è chiusa
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _ed.SetSelectedType(t));
         };
@@ -105,6 +131,8 @@ public partial class MainWindow : Window
             if (_updating || _ed.Selected is not { } se) return;
             _ed.SetSelectedStalls(StallCheck.IsChecked == true, se.StallLength);
         };
+        MixedBtn.Click += (_, _) => { _ed.SetSelectedSeparated(false); UpdatePanels(); };
+        SeparatedBtn.Click += (_, _) => { _ed.SetSelectedSeparated(true); UpdatePanels(); };
         HeightBox.ValueChanged += (_, _) =>
         {
             if (_updating || HeightBox.Value is not { } v) return;
@@ -146,6 +174,7 @@ public partial class MainWindow : Window
         _ed.StructureChanged += ScheduleHistory;
         NewSectionBtn.Click += (_, _) => { _ed.StartSection(); Map.Focus(); };
         FlipSectionBtn.Click += (_, _) => _ed.FlipSection();
+        SaveSectionPngBtn.Click += async (_, _) => await SaveSectionPng();
         DeleteSectionBtn.Click += (_, _) => { if (_ed.SelectedSection is { } s) _ed.DeleteSection(s); };
         CloseSectionBtn.Click += (_, _) => _ed.SelectSection(null);
         SectionNameBox.KeyDown += (_, e) => { if (e.Key == Key.Enter) { RenameSection(); Map.Focus(); } };
@@ -162,6 +191,11 @@ public partial class MainWindow : Window
         SaveAsProjMenu.Click += async (_, _) => await SaveProject();
         ExportDxfMenu.Click += async (_, _) => await ExportDxf();
         ExportCsvMenu.Click += async (_, _) => await ExportCsv();
+        ExportPdfMenu.Click += (_, _) =>
+        {
+            if (_ed.Data == null) { Fail("Apri prima un GeoPackage."); return; }
+            new ExportPdfWindow(this, _ed.Project, _projectPath != null ? Path.GetFileNameWithoutExtension(_projectPath) : BaseName).ShowDialog(this);
+        };
         ZoomBtn.Click += (_, _) => FitView();
         RotPlusBtn.Click += (_, _) => Map.Rotate(5);
         AddVarBtn.Click += (_, _) => { _ed.StartVariator(); Map.Focus(); };
@@ -172,6 +206,8 @@ public partial class MainWindow : Window
         CancelVarBtn.Click += (_, _) => _ed.CancelVariator();
         MapLabelsMenu.Click += (_, _) => Map.ShowLabels = MapLabelsMenu.IsChecked;
         PhotoIconsMenu.Click += (_, _) => Map.ShowPhotoIcons = PhotoIconsMenu.IsChecked;
+        NotesMenu.Click += (_, _) => { Map.ShowNotes = NotesMenu.IsChecked; if (!NotesMenu.IsChecked) SetNoteTool(MapCanvas.NoteTool.None); };
+        SetupNoteTools();
         RotMinusBtn.Click += (_, _) => Map.Rotate(-5);
         RotResetBtn.Click += (_, _) => Map.Rotate(-Map.Rotation);
         Map.ViewChanged += UpdateRotationLabel;
@@ -180,16 +216,16 @@ public partial class MainWindow : Window
         EditDraftLineBtn.Click += (_, _) => { _ed.StartEditLine(); Map.Focus(); };
         ExtendStartBtn.Click += (_, _) => { _ed.StartExtend(-1); Map.Focus(); };
         ExtendEndBtn.Click += (_, _) => { _ed.StartExtend(1); Map.Focus(); };
-        DeleteKeyBtn.Click += (_, _) => { _ed.DeleteKeyPoint(); Map.Focus(); };
         FinishEditBtn.Click += (_, _) => _ed.FinishEditLine();
         EditSnapCheck.IsCheckedChanged += (_, _) => { _ed.SnapOn = EditSnapCheck.IsChecked == true; if (!_updating) SnapCheck.IsChecked = EditSnapCheck.IsChecked; };
         EditFollowCheck.IsCheckedChanged += (_, _) => { _ed.FollowOn = EditFollowCheck.IsChecked == true; if (!_updating) FollowCheck.IsChecked = EditFollowCheck.IsChecked; };
         MapAddBtn.Click += (_, _) => OpenAddCard();
+        ShowGroupsBtn.Click += (_, _) => { Map.ShowGroups = !Map.ShowGroups; UpdatePanels(); Map.Focus(); };
         CreateAreaBtn.Click += (_, _) =>
         {
             // si sceglie solo il tipo: poi ogni gruppo di parti che si toccano diventa un elemento di quel tipo
             var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-            foreach (var t in Enum.GetValues<ElementType>())
+            foreach (var t in Element.Choosable)
             {
                 var tt = t;
                 var mi = new MenuItem
@@ -211,10 +247,15 @@ public partial class MainWindow : Window
         };
         KindTrackBtn.Click += (_, _) => ChooseKind(1);
         KindPolyBtn.Click += (_, _) => ChooseKind(2);
-        RefBorderRadio.IsCheckedChanged += (_, _) => UpdateAddOptions();
-        RefAxisRadio.IsCheckedChanged += (_, _) => UpdateAddOptions();
-        // a fine inserimento il riquadro si chiude; il pulsante sulla mappa lo riapre
-        ModeFillRadio.IsCheckedChanged += (_, _) => UpdateAddOptions();
+        SubBorderBtn.Click += (_, _) => ChooseSub(1);
+        SubAxisBtn.Click += (_, _) => ChooseSub(2);
+        SubFillBtn.Click += (_, _) => ChooseSub(3);
+        void StopDraft() { if (_ed.Mode == Mode.Trace) _ed.TraceCancel(); else if (_ed.Mode != Mode.Idle) _ed.CancelDraft(false); }
+        // percorso nel titolo: Aggiungi › tipo › Tracciato/Poligono › Bordo…; clic per tornare a quella scelta
+        AddCrumbTypeBtn.Click += (_, _) => { StopDraft(); _kind = 0; _sub = 0; ResetTypeStep(); UpdatePanels(); };
+        AddCrumbKindBtn.Click += (_, _) => { StopDraft(); _kind = 0; _sub = 0; _drawStarted = false; UpdatePanels(); };
+        AddCrumbSubBtn.Click += (_, _) => { StopDraft(); _sub = 0; _drawStarted = false; UpdatePanels(); };
+        BuildTypeList();
         TraceUndoBtn.Click += (_, _) => _ed.TraceUndo();
         MatchHostBtn.Click += (_, _) => { _ed.MatchFirstHostLength(); Map.Focus(); };
         TraceFinishBtn.Click += (_, _) => _ed.TraceFinish();
@@ -222,14 +263,6 @@ public partial class MainWindow : Window
         SnapCheck.IsCheckedChanged += (_, _) => _ed.SnapOn = SnapCheck.IsChecked == true;
         FollowCheck.IsCheckedChanged += (_, _) => _ed.FollowOn = FollowCheck.IsChecked == true;
 
-        NewElemBtn.Click += (_, _) =>
-        {
-            // elemento provvisorio (colore e larghezza dell'anteprima): il tipo vero si sceglie prima di «Prosegui»
-            if (ModeFillRadio.IsChecked == true) _ed.StartNewElement(ElementType.Carreggiata, ElementMode.Fill);
-            else if (RefAxisRadio.IsChecked == true) _ed.StartDrawElement(ElementType.Carreggiata, true);
-            else _ed.StartDrawElement(ElementType.Marciapiede, false);
-            Map.Focus();
-        };
         RangeFrom.ValueChanged += (_, _) => { if (!_updating) _ed.SetRange((double)(RangeFrom.Value ?? 0), (double)(RangeTo.Value ?? 0)); };
         RangeTo.ValueChanged += (_, _) => { if (!_updating) _ed.SetRange((double)(RangeFrom.Value ?? 0), (double)(RangeTo.Value ?? 0)); };
         WholeEdgeBtn.Click += (_, _) => _ed.WholeEdge();
@@ -263,6 +296,7 @@ public partial class MainWindow : Window
         AddLeftBtn.Click += (_, _) => { _ed.AddAlongside(true); Map.Focus(); };
         AddRightBtn.Click += (_, _) => { _ed.AddAlongside(false); Map.Focus(); };
 
+        _ed.AutoCommit = true;   // finito il disegno si salva subito e si passa a «Elemento selezionato»
         AddHandler(KeyDownEvent, OnKey, RoutingStrategies.Tunnel);
         if (string.IsNullOrEmpty(_ed.Message)) _ed.Message = "Per iniziare apri un progetto salvato o un GeoPackage (al centro, o dal menu File).";
         UpdatePanels();
@@ -271,7 +305,8 @@ public partial class MainWindow : Window
     /// <summary>Allinea l'elenco agli elementi del progetto toccando solo le righe che cambiano.</summary>
     void SyncRows(Project p)
     {
-        var shown = p.Shown.OrderBy(e => e.Group == 0 ? int.MaxValue : p.Groups.FindIndex(g => g.Id == e.Group)).ToList();
+        var eq = (ElemSearch.Text ?? "").Trim();
+        var shown = p.Shown.Where(e => Match(e.Name, eq) || Match(Element.TypeLabel(e.Type), eq)).OrderBy(e => e.Group == 0 ? int.MaxValue : p.Groups.FindIndex(g => g.Id == e.Group)).ToList();
         bool same = _rows.Count == shown.Count && _rows.Select(r => r.El).SequenceEqual(shown);
         if (!same)
         {
@@ -327,6 +362,8 @@ public partial class MainWindow : Window
         switch (e.Key)
         {
             case Key.Escape:
+                if (_ed.AssignGroup != 0 && _ed.FindGroup(_ed.AssignGroup) is { } ag) { _ed.ToggleAssign(ag); e.Handled = true; break; }
+                if (Map.Tool != MapCanvas.NoteTool.None && _ed.Mode == Mode.Idle) { SetNoteTool(MapCanvas.NoteTool.None); e.Handled = true; break; }
                 if (_ed.Mode == Mode.EditLine) { if (_ed.EditExtend != 0) _ed.StartExtend(0); else _ed.FinishEditLine(); }
                 else if (_ed.Mode == Mode.Trace) _ed.TraceCancel();
                 else if (_ed.Mode != Mode.Idle) _ed.CancelDraft();
@@ -357,6 +394,65 @@ public partial class MainWindow : Window
 
     /// <summary>Aggiungi elemento: 0 = non ancora scelto, 1 = tracciato, 2 = poligono.</summary>
     int _kind;
+    /// <summary>Tracciato: 0 = non ancora scelto, 1 = bordo, 2 = interasse, 3 = riempimento.</summary>
+    int _sub;
+
+    /// <summary>Clic su Bordo / Interasse / Riempimento: la scelta vale subito e il disegno parte.</summary>
+    /// <summary>Clic su Bordo / Interasse / Riempimento: poi si sceglie il tipo di elemento.</summary>
+    void ChooseSub(int s)
+    {
+        if (_ed.Mode == Mode.Trace) _ed.TraceCancel(); else if (_ed.Mode != Mode.Idle) _ed.CancelDraft(false);
+        _sub = s;
+        StartDrawing();
+    }
+
+    /// <summary>Il disegno è partito (dopo la scelta del tipo): se torna a riposo senza salvare, si torna alla scelta del tipo.</summary>
+    bool _drawStarted;
+    ElementType _chosenType;
+
+    void ResetTypeStep() { _typeChosen = false; _drawStarted = false; TypeCombo.SelectedIndex = -1; }
+
+    /// <summary>Elenco dei tipi (con il loro colore): un clic sceglie il tipo e il disegno parte.</summary>
+    void BuildTypeList()
+    {
+        TypeList.Children.Clear();
+        TypeList.RowDefinitions.Clear();
+        var types = Element.Choosable.ToList();
+        for (int r = 0; r < (types.Count + 1) / 2; r++) TypeList.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        for (int i = 0; i < types.Count; i++)
+        {
+            var t = types[i];
+            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8 };
+            row.Children.Add(new Border { Width = 14, Height = 14, CornerRadius = new Avalonia.CornerRadius(3), Background = MapCanvas.Colors(t, 255).fill,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = Element.TypeLabel(t), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+            var b = new Button { Classes = { "wide" }, Content = row, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left, Padding = new Avalonia.Thickness(10, 8) };
+            b.Click += (_, _) => ChooseType(t);
+            Grid.SetRow(b, i / 2); Grid.SetColumn(b, i % 2);
+            TypeList.Children.Add(b);
+        }
+    }
+
+    /// <summary>Primo passo: il tipo di elemento. Poi si sceglie come disegnarlo.</summary>
+    void ChooseType(ElementType t)
+    {
+        _typeChosen = true; _chosenType = t; _kind = 0; _sub = 0; _drawStarted = false;
+        _updating = true; TypeCombo.SelectedIndex = (int)t; _updating = false;
+        UpdatePanels();
+    }
+
+    /// <summary>Scelti tipo e modalità: il disegno parte.</summary>
+    void StartDrawing()
+    {
+        _drawStarted = true;
+        var t = _chosenType;
+        if (_kind == 2) _ed.StartDrawElement(t, false, polygon: true);
+        else if (_sub == 3) _ed.StartNewElement(t, ElementMode.Fill);
+        else _ed.StartDrawElement(t, _sub == 2);
+        Map.Focus();
+        UpdatePanels();
+    }
     bool _typeChosen;
     /// <summary>Ultimo tipo usato per un poligono: il prossimo poligono parte da lì.</summary>
     ElementType _lastPolyType = ElementType.Aiuola;
@@ -365,20 +461,26 @@ public partial class MainWindow : Window
     {
         // cambiando modalità si lascia il disegno in corso
         if (_ed.Mode == Mode.Trace) _ed.TraceCancel(); else if (_ed.Mode != Mode.Idle) _ed.CancelDraft(false);
-        _kind = k;
-        if (k == 2)
-        {
-            // poligono: si comincia subito a disegnare (elemento provvisorio, il tipo si sceglie alla fine)
-            _ed.StartDrawElement(_typeChosen && TypeCombo.SelectedIndex >= 0 ? (ElementType)TypeCombo.SelectedIndex : _lastPolyType, false, polygon: true);
-            Map.Focus();
-        }
-        UpdateAddOptions();
+        _kind = k; _sub = 0; _drawStarted = false;
+        if (k == 2) { StartDrawing(); return; }   // poligono: si disegna subito
         UpdatePanels();
     }
 
-    void UpdateAddOptions()
+    /// <summary>Due pulsanti affiancati: se uno è nascosto l'altro prende tutta la riga; se lo sono entrambi sparisce la riga.</summary>
+    static void PairRow(Grid row, Control a, Control b)
     {
-        NewElemBtn.Content = ModeFillRadio.IsChecked == true ? "Scegli i due elementi sulla mappa" : "Disegna sulla mappa";
+        Grid.SetColumn(a, 0); Grid.SetColumnSpan(a, b.IsVisible ? 1 : 2);
+        Grid.SetColumn(b, a.IsVisible ? 1 : 0); Grid.SetColumnSpan(b, a.IsVisible ? 1 : 2);
+        row.IsVisible = a.IsVisible || b.IsVisible;
+    }
+
+    /// <summary>Pulsanti della stessa larghezza su una riga: si dividono la riga solo quelli visibili.</summary>
+    static void EqualRow(Grid row, params Control[] items)
+    {
+        var vis = items.Where(c => c.IsVisible).ToList();
+        row.ColumnDefinitions.Clear();
+        foreach (var _ in vis) row.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        for (int k = 0; k < vis.Count; k++) Grid.SetColumn(vis[k], k);
     }
 
     static void SetActive(Border b, bool on) => b.Classes.Set("active", on);
@@ -414,7 +516,7 @@ public partial class MainWindow : Window
             if (p.Elements.Count > _lastElemCount && _ed.Mode == Mode.Idle)
             {
                 _addOpen = false;
-                if (p.Elements[^1].Mode == ElementMode.Polygon) _lastPolyType = p.Elements[^1].Type;
+                if (p.Elements[^1].Mode == ElementMode.Polygon && p.Elements[^1].Type != ElementType.Indefinito) _lastPolyType = p.Elements[^1].Type;
             }
             _lastElemCount = p.Elements.Count;
             // il riquadro resta aperto mentre si disegna; si apre con il pulsante sulla mappa
@@ -425,9 +527,9 @@ public partial class MainWindow : Window
             // tipo di elemento: si sceglie alla fine; finché non è scelto la tendina resta vuota
             // per il poligono la tendina c'è già mentre si disegna (alla chiusura si salva subito)
             bool polyDrawing = _ed.Mode == Mode.Trace && _ed.DrawingElement && _ed.DraftPolygon;
-            bool chooseType = _ed.Mode is Mode.SetWidth or Mode.PickOther || polyDrawing;
-            if (polyDrawing && !_typeChosen && TypeCombo.SelectedIndex != (int)_ed.DraftType) TypeCombo.SelectedIndex = (int)_ed.DraftType;   // siamo già dentro _updating
-            TypeRow.IsVisible = chooseType;
+            bool chooseType = _ed.Mode is Mode.SetWidth or Mode.PickOther;
+            if (polyDrawing && !_typeChosen && _ed.DraftType != ElementType.Indefinito && TypeCombo.SelectedIndex != (int)_ed.DraftType) TypeCombo.SelectedIndex = (int)_ed.DraftType;   // siamo già dentro _updating
+            TypeRow.IsVisible = false;   // il tipo si è scelto all'inizio
             if (!_typeChosen && !polyDrawing && TypeCombo.SelectedIndex != -1) TypeCombo.SelectedIndex = -1;
             if (_typeChosen && chooseType && TypeCombo.SelectedIndex != (int)_ed.DraftType) TypeCombo.SelectedIndex = (int)_ed.DraftType;
             TypeRow.Classes.Set("missing", chooseType && !_typeChosen && !polyDrawing);
@@ -436,20 +538,30 @@ public partial class MainWindow : Window
             {
                 EditLineInfo.Text = $"{ean.Count(a => !a.Auto)} punti chiave · {M(PL.Length(eedge.Points))}"
                     + (_ed.EditExtend > 0 ? " · aggiungi punti alla fine" : _ed.EditExtend < 0 ? " · aggiungi punti all'inizio" : "");
-                DeleteKeyBtn.IsEnabled = _ed.EditSel >= 0;
                 ExtendRow.IsVisible = ExtendLabel.IsVisible = !_ed.EditIsPolygon;
                 EditLineTitle.Text = _ed.EditIsPolygon ? "Modifica poligono" : "Modifica linea";
                 EditLineHelp.Text = _ed.EditIsPolygon
                     ? "Trascina un punto per spostarlo · Canc per toglierlo · doppio clic sul contorno per inserirne uno · doppio clic su un punto per renderlo curvo (trascina le maniglie) o tornare spigolo."
-                    : "Trascina un punto per spostarlo · clic su un punto e Canc (o «Elimina punto») per toglierlo · doppio clic sulla linea per inserirne uno nuovo · doppio clic su un punto per renderlo curvo (trascina le maniglie) o tornare spigolo. I punti verdi sono agganciati a un altro elemento e lo seguono.";
+                    : "Trascina un punto per spostarlo · clic su un punto e Canc per toglierlo · doppio clic sulla linea per inserirne uno nuovo · doppio clic su un punto per renderlo curvo (trascina le maniglie) o tornare spigolo. I punti verdi sono agganciati a un altro elemento e lo seguono.";
                 ExtendStartBtn.Classes.Set("accent", _ed.EditExtend < 0);
                 ExtendEndBtn.Classes.Set("accent", _ed.EditExtend > 0);
                 EditSnapCheck.IsChecked = _ed.SnapOn; EditFollowCheck.IsChecked = _ed.FollowOn;
             }
             EditDraftLineBtn.IsVisible = _ed.Mode == Mode.SetWidth && _ed.EditableLine() != null;
             SetActive(AddCard, AddCard.IsVisible);
-            MapAddBtn.IsVisible = hasData && _layersConfirmed && !_addOpen && _ed.Mode == Mode.Idle;
-            CreateAreaBtn.IsVisible = hasData && _layersConfirmed && _ed.Mode == Mode.Idle && _ed.HasPick;
+            // con elementi scelti (Maiusc+clic) in alto ci sono solo «Crea gruppo» e «Aggiungi a gruppo»
+            // pulsanti in alto secondo la modalità: normale → «Aggiungi elemento»; modifica di un gruppo → «Salva gruppo»;
+            // elementi scelti → «Crea gruppo» / «Aggiungi a gruppo»; aree scelte → «Crea elemento»
+            bool editGroup = hasData && _layersConfirmed && _ed.FindGroup(_ed.AssignGroup) != null;
+            bool groupSel = hasData && _layersConfirmed && _ed.Mode == Mode.Idle && _ed.GroupSel.Count > 0 && !editGroup;
+            SaveGroupBtn.IsVisible = editGroup;
+            if (editGroup) SaveGroupText.Text = $"Salva gruppo «{_ed.FindGroup(_ed.AssignGroup)!.Name}»";
+            NewGroupFromSelBtn.IsVisible = AddToGroupBtn.IsVisible = groupSel;
+            AddToGroupBtn.IsEnabled = p.Groups.Count > 0;
+            MapAddBtn.IsVisible = hasData && _layersConfirmed && !_addOpen && _ed.Mode == Mode.Idle && !groupSel && !editGroup;
+            ShowGroupsBtn.IsVisible = MapAddBtn.IsVisible;
+            ShowGroupsIcon.Data = (Avalonia.Media.Geometry)this.FindResource(Map.ShowGroups ? "IconEye" : "IconEyeOff")!;
+            CreateAreaBtn.IsVisible = hasData && _layersConfirmed && _ed.Mode == Mode.Idle && _ed.HasPick && !groupSel && !editGroup;
             if (CreateAreaBtn.IsVisible)
             {
                 var why = _ed.PickBlocker();
@@ -459,8 +571,24 @@ public partial class MainWindow : Window
             // tracciato / poligono: se si sta disegnando un poligono resta acceso «Poligono»
             if (_ed.Mode == Mode.Trace && _ed.DrawingElement) _kind = _ed.DraftPolygon ? 2 : 1;
             else if (draftingNow) _kind = _ed.DraftMode == ElementMode.Polygon ? 2 : 1;
-            KindTrackBtn.IsChecked = _kind == 1; KindPolyBtn.IsChecked = _kind == 2;
-            TrackOptions.IsVisible = _kind == 1 && _ed.Mode == Mode.Idle;
+            bool addBusy = _ed.Mode == Mode.Trace && _ed.DrawingElement || draftingNow;
+            // annullato il disegno (Esc) si torna alla scelta della modalità; il tipo resta
+            if (!addBusy && _ed.Mode == Mode.Idle && _drawStarted) { _drawStarted = false; if (_kind == 2) _kind = 0; else _sub = 0; }
+            if (addBusy && _kind == 1 && _sub == 0) _sub = _ed.DraftMode == ElementMode.Fill ? 3 : _ed.DraftCentered ? 2 : 1;
+            if (addBusy && !_typeChosen) { _typeChosen = true; _drawStarted = true; _chosenType = _ed.DraftType; }
+            // 1) tipo  2) tracciato o poligono  3) per il tracciato: bordo / interasse / riempimento
+            TypeList.IsVisible = _addOpen && !_typeChosen && _ed.Mode == Mode.Idle;
+            KindTrackBtn.IsChecked = _kind != 2; KindPolyBtn.IsChecked = _kind != 1;
+            bool chosen = _kind == 2 || (_kind == 1 && _sub > 0);
+            KindRow.IsVisible = _typeChosen && !chosen;
+            TrackOptions.IsVisible = _typeChosen && _kind == 1 && _sub == 0;
+            AddSep0.IsVisible = AddCrumbTypeBtn.IsVisible = _typeChosen;
+            if (_typeChosen) AddCrumbTypeBtn.Content = Element.TypeLabel(addBusy ? _ed.DraftType : _chosenType);
+            AddTitle.Text = _typeChosen ? "Aggiungi" : "Aggiungi elemento";
+            AddSep1.IsVisible = AddCrumbKindBtn.IsVisible = _kind != 0;
+            AddCrumbKindBtn.Content = _kind == 2 ? "Poligono" : "Tracciato";
+            AddSep2.IsVisible = AddCrumbSubBtn.IsVisible = _kind == 1 && _sub > 0;
+            AddCrumbSubBtn.Content = _sub == 3 ? "Riempimento" : _sub == 2 ? "Interasse" : "Bordo";
 
             // Livelli
             if (_ed.Data is { } d)
@@ -482,7 +610,7 @@ public partial class MainWindow : Window
                 StatusText.Text = "Controlla i livelli a sinistra (ruolo e visibilità) e premi «Conferma i livelli».";
 
             // Disegno della linea
-            DrawPanel.IsVisible = _ed.Mode == Mode.Trace || (_ed.Mode == Mode.Idle && hasData && _kind != 0);
+            DrawPanel.IsVisible = _ed.Mode == Mode.Trace;
             TracePanel.IsVisible = _ed.Mode == Mode.Trace;
             var fh = _ed.FirstPointHost;
             MatchHostBtn.IsVisible = fh != null;
@@ -491,11 +619,8 @@ public partial class MainWindow : Window
 
             // Nuovo elemento
             bool drafting = _ed.Mode is Mode.PickBase or Mode.PickRange or Mode.SetWidth or Mode.PickOther;
-            NewElemBtn.IsVisible = !drafting && _ed.Mode != Mode.Trace && _kind == 1;
-            NewElemBtn.IsEnabled = hasData;
             TypeCombo.IsEnabled = true;   // l'elemento si può cambiare in ogni momento
-            ModeFillRadio.IsEnabled = RefBorderRadio.IsEnabled = RefAxisRadio.IsEnabled = !drafting && _ed.Mode != Mode.Trace;
-            if (_kind == 0 && _ed.Mode == Mode.Idle) DrawPanel.IsVisible = false;
+            SubBorderBtn.IsEnabled = SubAxisBtn.IsEnabled = SubFillBtn.IsEnabled = hasData;
             // il tratto si sceglie solo riempiendo tra due elementi; una linea disegnata si usa per intero
             RangePanel.IsVisible = _ed.DraftMode == ElementMode.Fill && _ed.Mode is Mode.PickRange or Mode.PickOther;
             if (RangePanel.IsVisible && _ed.DraftBase is { } db)
@@ -509,6 +634,7 @@ public partial class MainWindow : Window
             }
             WidthPanel.IsVisible = _ed.Mode == Mode.SetWidth && _ed.DraftMode != ElementMode.Polygon;
             FlipDraftBtn.IsVisible = WidthPanel.IsVisible && !(_ed.Preview?.Centered ?? false);
+            EqualRow(DraftBtnRow, FlipDraftBtn, EditDraftLineBtn, CancelDraftBtn);
             DraftWidthBox.Value = (decimal)_ed.DraftWidth;
             DraftSmoothBox.Value = (decimal)_ed.DraftSmooth;
             OtherInfo.IsVisible = _ed.Mode == Mode.PickOther;
@@ -529,17 +655,48 @@ public partial class MainWindow : Window
             // i riquadri di destra galleggiano sulla mappa e compaiono solo quando servono
             RightHintCard.IsVisible = false;
             RightPanel.IsVisible = AddCard.IsVisible || SelPanel.IsVisible || EditLineCard.IsVisible;
+            NoteTools.IsVisible = hasData;
+            PenBtn.IsVisible = TextBtn.IsVisible = hasData && _layersConfirmed;
+            // i pulsanti in basso a destra restano fermi: il riquadro di destra si ferma sopra di loro
+            NoteTools.Margin = new Avalonia.Thickness(0, 0, 14, 14);   // il riquadro della sezione si apre sopra di loro
             RightHintText.Text = !hasData ? "Apri un progetto o un GeoPackage per iniziare."
                 : !_layersConfirmed ? "Conferma i livelli a sinistra: poi qui potrai aggiungere e modificare gli elementi."
                 : "Nessun elemento selezionato. Clicca un elemento sulla mappa o nell'elenco a sinistra per modificarlo, oppure premi «Aggiungi elemento».";
-            ElementsCard.IsVisible = TotalsCard.IsVisible = PhotosCard.IsVisible = SectionsCard.IsVisible = GroupsCard.IsVisible = _ed.Data != null && _layersConfirmed;
+            bool leftOn = _ed.Data != null && _layersConfirmed;
+            // una sezione aperta (dalla mappa o appena disegnata) mostra la scheda delle sezioni
+            if (_ed.SelectedSection?.Id != _lastSecTab) { _lastSecTab = _ed.SelectedSection?.Id; if (_lastSecTab != null) _leftTab = 2; }
+            TotalsCard.IsVisible = LeftTabs.IsVisible = leftOn;
+            // un riquadro alla volta, scelto con le schede (con il numero di voci)
+            GroupsCard.IsVisible = leftOn && _leftTab == 0;
+            PhotosCard.IsVisible = leftOn && _leftTab == 1;
+            SectionsCard.IsVisible = leftOn && _leftTab == 2;
+            ElementsCard.IsVisible = leftOn && _leftTab == 3;
+            LCntGroups.Text = $"({p.Groups.Count})";
+            LCntPhotos.Text = $"({p.Photos.Count})";
+            LCntSections.Text = $"({p.Sections.Count})";
+            LCntElements.Text = $"({p.Elements.Count})";
+            LTabGroups.Classes.Set("on", _leftTab == 0); LTabPhotos.Classes.Set("on", _leftTab == 1);
+            LTabSections.Classes.Set("on", _leftTab == 2); LTabElements.Classes.Set("on", _leftTab == 3);
             UpdateSections();
             UpdateGroups();
             UpdatePhotoList();
             if (s != null)
             {
                 if (NameBox.Text != s.Name && !NameBox.IsFocused) NameBox.Text = s.Name;
-                if (SelTypeCombo.SelectedIndex != (int)s.Type) SelTypeCombo.SelectedIndex = (int)s.Type;
+                // «Indefinito» compare in fondo solo per gli elementi che lo sono ancora
+                bool undef = s.Type == ElementType.Indefinito;
+                if (SelTypeCombo.ItemCount != Element.Choosable.Length + (undef ? 1 : 0))
+                    SelTypeCombo.ItemsSource = Element.Choosable.Select(TypeItem.Of).Concat(undef ? new[] { TypeItem.Of(ElementType.Indefinito) } : Array.Empty<TypeItem>()).ToList();
+                int ti = undef ? Element.Choosable.Length : Array.IndexOf(Element.Choosable, s.Type);
+                if (SelTypeCombo.SelectedIndex != ti) SelTypeCombo.SelectedIndex = ti;
+                // titolo: come è disegnato l'elemento
+                SelTitle.Text = s.Mode switch
+                {
+                    ElementMode.Polygon => "Poligono",
+                    ElementMode.Fill => "Tracciato  ›  Riempimento",
+                    _ => s.Centered ? "Tracciato  ›  Interasse" : "Tracciato  ›  Bordo"
+                };
+                SelTypeRow.Classes.Set("missing", s.Type == ElementType.Indefinito);
                 SelGroupRow.IsVisible = p.Groups.Count > 0;
                 var gnames = new List<string> { "Nessuno" }; gnames.AddRange(p.Groups.Select(g => g.Name));
                 if (SelGroupCombo.ItemsSource is not List<string> cur || !cur.SequenceEqual(gnames)) SelGroupCombo.ItemsSource = gnames;
@@ -556,9 +713,11 @@ public partial class MainWindow : Window
                     StallInfo.Text = s.StallLines ? $"circa {ns} stalli lungo {M(s.Metrics.Length)}" : "";
                     StallInfo.IsVisible = s.StallLines;
                 }
+                SepPanel.IsVisible = s.Type == ElementType.Ciclopedonale && s.Mode != ElementMode.Polygon;
+                MixedBtn.IsChecked = !s.Separated; SeparatedBtn.IsChecked = s.Separated;
                 HeightPanel.IsVisible = s.HasHeight;
                 if (s.HasHeight) HeightBox.Value = (decimal)Math.Round(s.Height, 2);
-                OptNone.IsVisible = !DividerPanel.IsVisible && !StallPanel.IsVisible && !HeightPanel.IsVisible;
+                OptNone.IsVisible = !DividerPanel.IsVisible && !StallPanel.IsVisible && !HeightPanel.IsVisible && !SepPanel.IsVisible;
                 if (s.SupportsDividers)
                 {
                     int nd = s.EffectiveDividers;
@@ -576,11 +735,13 @@ public partial class MainWindow : Window
                       + (follows is { Count: > 0 } ? " · segue " + string.Join(", ", follows) : "")
                     : $"{Element.TypeLabel(s.Type)} · agganciato a {p.EdgeName(s.Base)}"
                       + (s.Mode == ElementMode.Fill && s.Other is { } so ? $" e {p.EdgeName(so)}" : "");
-                LineBtns.IsVisible = own != null;
+                EditSelLineBtn.IsVisible = own != null;
                 ToPolygonBtn.IsVisible = s.Mode != ElementMode.Polygon;
                 AlongPanel.IsVisible = _ed.CanAddAlongside;
                 SelRangeLabel.IsVisible = SelRangeGrid.IsVisible = own == null;
-                FlipSelBtn.IsVisible = !s.Centered;
+                FlipSelBtn.IsVisible = !s.Centered && s.Mode == ElementMode.Offset;
+                PairRow(LineBtns, FlipSelBtn, EditSelLineBtn);
+                PairRow(EndBtns, ToPolygonBtn, DeleteBtn);
                 SelError.IsVisible = s.Error != null; SelError.Text = s.Error;
                 SelWidthPanel.IsVisible = s.Mode == ElementMode.Offset;
                 UpdateVariators(s);
@@ -693,8 +854,11 @@ public partial class MainWindow : Window
         await OpenProjectPath(path);
     }
 
-    public async Task OpenProjectPath(string path)
+    public async Task OpenProjectPath(string path) => await OpenProjectPath(path, false);
+
+    async Task OpenProjectPath(string path, bool keepView)
     {
+        var view = Map.View;
         ClosePhotoView();
         try
         {
@@ -733,6 +897,8 @@ public partial class MainWindow : Window
             _ed.Message = $"Progetto aperto: {_ed.Project.Elements.Count} elementi. Seleziona un elemento per modificarlo o premi «Aggiungi elemento».";
             _ed.NotifyAll();
             Map.InvalidateBackground();
+            WatchProject(path);
+            if (keepView) { Map.View = view; return; }
             Map.ZoomTo(_ed.Extent());
             Avalonia.Threading.Dispatcher.UIThread.Post(FitView, Avalonia.Threading.DispatcherPriority.Background);
         }
@@ -750,10 +916,66 @@ public partial class MainWindow : Window
         {
             ProjectFile.Save(path, _ed.Project, _ed.Data);
             _projectPath = path; _savedSnap = Snapshot();
+            WatchProject(path);
             Ok("Progetto salvato in " + path);
             return true;
         }
         catch (Exception ex) { Fail("Salvataggio non riuscito: " + ex.Message); return false; }
+    }
+
+    // ───────────── progetto modificato da fuori (es. dal server MCP) ─────────────
+
+    FileSystemWatcher? _watch;
+    string? _diskText;              // contenuto del file come l'abbiamo letto o scritto noi
+    int _watchVer;
+    bool _askingReload;
+
+    void WatchProject(string path)
+    {
+        try { _diskText = File.ReadAllText(path); } catch { _diskText = null; }
+        _watch?.Dispose(); _watch = null;
+        try
+        {
+            var full = Path.GetFullPath(path);
+            _watch = new FileSystemWatcher(Path.GetDirectoryName(full)!, Path.GetFileName(full))
+            { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName, EnableRaisingEvents = true };
+            // si aspetta che il file smetta di cambiare (scrittura finita) prima di rileggerlo
+            void Kick()
+            {
+                int v = Interlocked.Increment(ref _watchVer);
+                Task.Delay(700).ContinueWith(_ =>
+                {
+                    if (v == Volatile.Read(ref _watchVer))
+                        Avalonia.Threading.Dispatcher.UIThread.Post(async () => await ProjectChangedOnDisk());
+                });
+            }
+            _watch.Changed += (_, _) => Kick();
+            _watch.Created += (_, _) => Kick();
+            _watch.Renamed += (_, _) => Kick();
+        }
+        catch { _watch = null; }
+    }
+
+    async Task ProjectChangedOnDisk()
+    {
+        if (_projectPath is not { } path || _askingReload || !File.Exists(path)) return;
+        string text;
+        try { text = File.ReadAllText(path); } catch { return; }
+        if (text == _diskText) return;
+        _diskText = text;
+        if (HasUnsavedChanges)
+        {
+            _askingReload = true;
+            try
+            {
+                if (!await AskConfirm("Progetto modificato", $"Il file «{Path.GetFileName(path)}» è stato modificato da un altro programma (per esempio dall'assistente tramite il server MCP). Ricaricarlo? Le modifiche non salvate qui andrebbero perse.", "Ricarica"))
+                    return;
+            }
+            finally { _askingReload = false; }
+        }
+        await OpenProjectPath(path, keepView: true);
+        _ed.Message = "Progetto ricaricato: è stato modificato da un altro programma.";
+        _ed.NotifyAll();
     }
 
     // ───────────── modifiche non salvate ─────────────
@@ -949,6 +1171,7 @@ public partial class MainWindow : Window
     /// <summary>Apre il fotoinserimento al posto della mappa centrale (la colonna di sinistra resta).</summary>
     public async Task OpenPhotoRef(PhotoInsertRef r)
     {
+        _leftTab = 1;
         if (_ed.Data == null) return;
         if (_photoRef == r && PhotoHost.IsVisible) { _photoView?.Focus(); return; }
         if (!File.Exists(r.Path)) { Fail($"Non trovo la foto «{r.Path}»."); r.Missing = true; UpdatePhotoList(); return; }
@@ -1008,8 +1231,121 @@ public partial class MainWindow : Window
             foreach (var sc in _ed.Project.Sections) { yield return sc.A; yield return sc.B; }
         }
         double right = RightPanel.IsVisible ? RightPanel.Bounds.Width + 24 : 16;
-        if (!Map.FitPoints(Pts(), new Avalonia.Thickness(16, 60, right, 36))) Map.ZoomTo(_ed.Extent());
+        if (!Map.FitPoints(Pts(), new Avalonia.Thickness(16, 64, right, 64))) Map.ZoomTo(_ed.Extent());
     }
+
+    // ───────────── note: penna e testo ─────────────
+
+    static readonly string[] NoteColorList = { "#E53935", "#FB8C00", "#FDD835", "#43A047", "#1E88E5", "#8E24AA", "#212121", "#FFFFFF" };
+    static readonly double[] PenSizes = { 2, 4, 8 };
+    static readonly double[] TextSizes = { 12, 16, 24 };
+    Annotation? _editingNote;
+    V2 _noteAt;
+
+    void SetupNoteTools()
+    {
+        PenBtn.Click += (_, _) => SetNoteTool(PenBtn.IsChecked == true ? MapCanvas.NoteTool.Pen : MapCanvas.NoteTool.None);
+        TextBtn.Click += (_, _) => SetNoteTool(TextBtn.IsChecked == true ? MapCanvas.NoteTool.Text : MapCanvas.NoteTool.None);
+        EraserBtn.Click += (_, _) => SetNoteTool(EraserBtn.IsChecked == true ? MapCanvas.NoteTool.Eraser : _lastNoteTool);
+        Map.TextRequested += (w, sp, existing) =>
+        {
+            CommitNoteText();
+            _editingNote = existing; _noteAt = w;
+            if (existing != null) { Map.NoteColor = existing.Color; Map.TextSize = existing.Size; BuildNoteBar(); }
+            NoteTextBox.Text = existing?.Text ?? "";
+            NoteTextBox.FontSize = Map.TextSize;
+            NoteTextBox.Foreground = new SolidColorBrush(Color.Parse(Map.NoteColor == "#FFFFFF" ? "#212121" : Map.NoteColor));
+            Canvas.SetLeft(NoteTextBox, sp.X - 5); Canvas.SetTop(NoteTextBox, sp.Y - 3);
+            NoteTextBox.IsVisible = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => { NoteTextBox.Focus(); NoteTextBox.SelectAll(); });
+        };
+        NoteTextBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)) { CommitNoteText(); Map.Focus(); e.Handled = true; }
+            else if (e.Key == Key.Escape) { _editingNote = null; NoteTextBox.IsVisible = false; Map.Focus(); e.Handled = true; }
+        };
+        NoteTextBox.LostFocus += (_, _) => CommitNoteText();
+        BuildNoteBar();
+    }
+
+    MapCanvas.NoteTool _lastNoteTool = MapCanvas.NoteTool.Pen;
+
+    void SetNoteTool(MapCanvas.NoteTool t)
+    {
+        CommitNoteText();
+        if (t is MapCanvas.NoteTool.Pen or MapCanvas.NoteTool.Text) _lastNoteTool = t;
+        if (t != MapCanvas.NoteTool.None && _ed.Mode != Mode.Idle) { if (_ed.Mode == Mode.Trace) _ed.TraceCancel(); else _ed.CancelDraft(); }
+        if (t != MapCanvas.NoteTool.None) { _ed.Select(null); }
+        Map.Tool = t;
+        PenBtn.IsChecked = t == MapCanvas.NoteTool.Pen || (t == MapCanvas.NoteTool.Eraser && _lastNoteTool == MapCanvas.NoteTool.Pen);
+        TextBtn.IsChecked = t == MapCanvas.NoteTool.Text || (t == MapCanvas.NoteTool.Eraser && _lastNoteTool == MapCanvas.NoteTool.Text);
+        EraserBtn.IsChecked = t == MapCanvas.NoteTool.Eraser;
+        NoteBar.IsVisible = t != MapCanvas.NoteTool.None;
+        BuildNoteBar();
+        Map.Focus();
+    }
+
+    /// <summary>Menu sopra penna e testo: colori e dimensioni (del tratto o del testo).</summary>
+    void BuildNoteBar()
+    {
+        bool text = _lastNoteTool == MapCanvas.NoteTool.Text;
+        NoteColors.Children.Clear();
+        foreach (var c in NoteColorList)
+        {
+            var cc = c; bool on = string.Equals(Map.NoteColor, c, StringComparison.OrdinalIgnoreCase);
+            var b = new Button { Width = 20, Height = 20, Padding = new Avalonia.Thickness(0), CornerRadius = new Avalonia.CornerRadius(10),
+                Background = new SolidColorBrush(Color.Parse(c)), BorderThickness = new Avalonia.Thickness(on ? 2.5 : 1),
+                BorderBrush = on ? Brushes.White : new SolidColorBrush(Color.Parse("#66FFFFFF")) };
+            b.Click += (_, _) => { Map.NoteColor = cc; if (_editingNote != null || NoteTextBox.IsVisible) NoteTextBox.Foreground = new SolidColorBrush(Color.Parse(cc == "#FFFFFF" ? "#212121" : cc)); BuildNoteBar(); };
+            NoteColors.Children.Add(b);
+        }
+        NoteSizes.Children.Clear();
+        var sizes = text ? TextSizes : PenSizes;
+        foreach (var sz in sizes)
+        {
+            var s = sz; bool on = Math.Abs((text ? Map.TextSize : Map.PenSize) - sz) < 0.01;
+            object content = text
+                ? new TextBlock { Text = "A", FontSize = sz * 0.75 + 4, FontWeight = FontWeight.SemiBold, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }
+                : new Avalonia.Controls.Shapes.Ellipse { Width = sz * 1.3 + 3, Height = sz * 1.3 + 3, Fill = Brushes.White };
+            var b = new Button { Width = 28, Height = 28, Padding = new Avalonia.Thickness(0), Content = content,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Background = on ? new SolidColorBrush(Color.Parse("#FF3A414C")) : Brushes.Transparent, BorderThickness = new Avalonia.Thickness(on ? 1.5 : 0), BorderBrush = (IBrush)this.FindResource("AccentBrush")! };
+            ToolTip.SetTip(b, text ? $"Testo {sz:0} px" : $"Tratto {sz:0} px");
+            b.Click += (_, _) =>
+            {
+                if (text) { Map.TextSize = s; if (NoteTextBox.IsVisible) NoteTextBox.FontSize = s; } else Map.PenSize = s;
+                BuildNoteBar();
+            };
+            NoteSizes.Children.Add(b);
+        }
+    }
+
+    void CommitNoteText()
+    {
+        if (!NoteTextBox.IsVisible) return;
+        NoteTextBox.IsVisible = false;
+        var txt = (NoteTextBox.Text ?? "").TrimEnd();
+        var n = _editingNote; _editingNote = null;
+        if (n != null)
+        {
+            if (txt.Length == 0) _ed.Project.Annotations.Remove(n);
+            else { n.Text = txt; n.Color = Map.NoteColor; n.Size = Map.TextSize; }
+        }
+        else if (txt.Length > 0)
+            _ed.Project.Annotations.Add(new Annotation { IsText = true, Pts = new() { _noteAt }, Text = txt, Color = Map.NoteColor, Size = Map.TextSize });
+        else return;
+        _ed.NotifyAll();
+    }
+
+    /// <summary>Scheda della colonna di sinistra: 0 gruppi, 1 fotoinserimenti, 2 sezioni, 3 elementi.</summary>
+    /// <summary>Ricerca nelle schede di sinistra: il testo è contenuto nel nome (senza badare a maiuscole e accenti).</summary>
+    static bool Match(string? name, string q) =>
+        q.Length == 0 || System.Globalization.CultureInfo.GetCultureInfo("it-IT").CompareInfo.IndexOf(name ?? "", q,
+            System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
+    int _leftTab = 3;
+    int? _lastSecTab;
+    void SetLeftTab(int t) { _leftTab = t; UpdatePanels(); }
 
     string _groupSig = "";
     bool _focusGroup;
@@ -1020,7 +1356,8 @@ public partial class MainWindow : Window
     {
         var p = _ed.Project;
         if (_ed.FindGroup(_ed.CurrentGroup) == null) _ed.CurrentGroup = 0;
-        var sig = _ed.CurrentGroup + "#" + string.Join("|", p.Groups.Select(g => $"{g.Id},{g.Name},{g.Visible},{p.Elements.Count(e => e.Group == g.Id)}"));
+        var gq = (GroupSearch.Text ?? "").Trim();
+        var sig = gq + "§" + _ed.CurrentGroup + "/" + _ed.AssignGroup + "#" + string.Join("|", p.Groups.Select(g => $"{g.Id},{g.Name},{g.Visible},{g.Color},{p.Elements.Count(e => e.Group == g.Id)}"));
         if (sig == _groupSig) return;
         if (GroupList.Children.OfType<Border>().Select(b => b.Child).OfType<Grid>().SelectMany(x => x.Children).OfType<TextBox>().Any(t => t.IsFocused)) return;
         _groupSig = sig;
@@ -1036,11 +1373,11 @@ public partial class MainWindow : Window
             return b;
         }
         TextBox? last = null;
-        foreach (var g in p.Groups)
+        foreach (var g in p.Groups.Where(x => Match(x.Name, gq)))
         {
             var gg = g;
             bool cur = g.Id == _ed.CurrentGroup;
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), ColumnSpacing = 2 };
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto,Auto,Auto"), ColumnSpacing = 2 };
             var border = new Border { CornerRadius = new Avalonia.CornerRadius(6), Padding = new Avalonia.Thickness(2), Child = row,
                 Background = cur ? Res("SelectedBackground") : Brushes.Transparent, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
             border.PointerPressed += (_, e) =>
@@ -1048,23 +1385,34 @@ public partial class MainWindow : Window
                 if (e.Source is TextBox || (e.Source is Avalonia.Visual sv && (sv is Button || Avalonia.VisualTree.VisualExtensions.FindAncestorOfType<Button>(sv) != null))) return;
                 _ed.CurrentGroup = _ed.CurrentGroup == gg.Id ? 0 : gg.Id; _groupSig = ""; UpdateGroups();
             };
-            row.Children.Add(IconBtn(g.Visible ? "IconEye" : "IconEyeOff", g.Visible ? "Nascondi il blocco" : "Mostra il blocco",
+            row.Children.Add(IconBtn(g.Visible ? "IconEye" : "IconEyeOff", g.Visible ? "Nascondi il gruppo" : "Mostra il gruppo",
                 g.Visible ? Res("AccentBrush") : Res("TextTertiary"), () => _ed.SetGroupVisible(gg, !gg.Visible)));
+            var dot = new Border { Width = 12, Height = 12, CornerRadius = new Avalonia.CornerRadius(6), Margin = new Avalonia.Thickness(2, 0),
+                Background = new SolidColorBrush(Color.Parse(g.Color)), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            ToolTip.SetTip(dot, "Colore del gruppo: il bordo dei suoi elementi sulla mappa");
+            Grid.SetColumn(dot, 1); row.Children.Add(dot);
             var name = new TextBox { Text = g.Name, FontSize = 12, BorderThickness = new Avalonia.Thickness(0), Background = Brushes.Transparent,
                 Padding = new Avalonia.Thickness(4, 3), MinHeight = 0, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
                 Foreground = g.Visible ? Res("TextPrimary") : Res("TextTertiary"), FontWeight = cur ? FontWeight.SemiBold : FontWeight.Normal };
             void Commit() { if (!string.IsNullOrWhiteSpace(name.Text)) _ed.RenameGroup(gg, name.Text!); else name.Text = gg.Name; }
             name.LostFocus += (_, _) => Commit();
             name.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { Commit(); Map.Focus(); e.Handled = true; } else if (e.Key == Avalonia.Input.Key.Escape) { name.Text = gg.Name; Map.Focus(); e.Handled = true; } };
-            Grid.SetColumn(name, 1); row.Children.Add(name);
+            Grid.SetColumn(name, 2); row.Children.Add(name);
             var cnt = new TextBlock { Text = p.Elements.Count(e => e.Group == g.Id).ToString(), FontSize = 11.5, Foreground = Res("TextSecondary"),
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Avalonia.Thickness(4, 0) };
-            ToolTip.SetTip(cnt, "Elementi nel blocco");
-            Grid.SetColumn(cnt, 2); row.Children.Add(cnt);
-            var dup = IconBtn("IconCopy", "Nuova versione: copia il blocco e nasconde questo", Res("TextSecondary"), () => _ed.DuplicateGroup(gg));
-            Grid.SetColumn(dup, 3); row.Children.Add(dup);
-            var del = IconBtn("IconTrash", "Elimina il blocco (gli elementi restano, senza blocco)", Res("TextTertiary"), () => _ed.DeleteGroup(gg));
-            Grid.SetColumn(del, 4); row.Children.Add(del);
+            ToolTip.SetTip(cnt, "Elementi nel gruppo");
+            Grid.SetColumn(cnt, 3); row.Children.Add(cnt);
+            bool assigning = _ed.AssignGroup == g.Id;
+            // «+» attiva soltanto la modifica del gruppo; si esce con «Salva gruppo» in alto (o Esc)
+            var add = new Button { Classes = { "transparent" }, Padding = new Avalonia.Thickness(7, 2), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Content = new TextBlock { Text = "+", FontSize = 15, FontWeight = FontWeight.Bold }, IsEnabled = !assigning };
+            ToolTip.SetTip(add, "Modifica il gruppo: clic sugli elementi della mappa per aggiungerli o toglierli");
+            add.Click += (_, _) => { if (_ed.AssignGroup != gg.Id) _ed.ToggleAssign(gg); Map.Focus(); };
+            Grid.SetColumn(add, 4); row.Children.Add(add);
+            var dup = IconBtn("IconCopy", "Nuova versione: copia il gruppo e nasconde questo", Res("TextSecondary"), () => _ed.DuplicateGroup(gg));
+            Grid.SetColumn(dup, 5); row.Children.Add(dup);
+            var del = IconBtn("IconTrash", "Elimina il gruppo (gli elementi restano, senza gruppo)", Res("TextTertiary"), () => _ed.DeleteGroup(gg));
+            Grid.SetColumn(del, 6); row.Children.Add(del);
             GroupList.Children.Add(border);
             last = name;
         }
@@ -1080,11 +1428,12 @@ public partial class MainWindow : Window
     {
         var ph = _ed.Project.Photos;
         NoPhotoText.IsVisible = ph.Count == 0;
-        var sig = (_photoRef?.Name ?? "") + "#" + string.Join("|", ph.Select(r => $"{r.Name},{r.Pairs},{r.Cam.HasValue},{r.Missing}"));
-        if (sig == _photoSig && PhotoList.Children.Count == ph.Count) return;
+        var pq = (PhotoSearch.Text ?? "").Trim();
+        var sig = pq + "§" + (_photoRef?.Name ?? "") + "#" + string.Join("|", ph.Select(r => $"{r.Name},{r.Pairs},{r.Cam.HasValue},{r.Missing}"));
+        if (sig == _photoSig) return;
         _photoSig = sig;
         PhotoList.Children.Clear();
-        foreach (var r in ph)
+        foreach (var r in ph.Where(x => Match(x.Name, pq)))
         {
             var rr = r;
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 2 };
@@ -1131,7 +1480,7 @@ public partial class MainWindow : Window
 
     void OpenAddCard()
     {
-        _kind = 0; _typeChosen = false; TypeCombo.SelectedIndex = -1;
+        _kind = 0; _sub = 0; ResetTypeStep();
         _addOpen = true; _lastElemCount = _ed.Project.Elements.Count; _ed.Select(null); UpdatePanels();
     }
 
@@ -1265,12 +1614,13 @@ public partial class MainWindow : Window
         NewSectionBtn.Classes.Set("primary", _ed.Mode == Mode.PickSection);
 
         // elenco nel riquadro a sinistra
-        var sig = (_ed.SelectedSection?.Id ?? -1) + "#" + string.Join("|", p.Sections.Select(s => $"{s.Id},{s.Name},{s.Length:0.0}"));
+        var sq = (SectionSearch.Text ?? "").Trim();
+        var sig = sq + "§" + (_ed.SelectedSection?.Id ?? -1) + "#" + string.Join("|", p.Sections.Select(s => $"{s.Id},{s.Name},{s.Length:0.0}"));
         if (sig != _secListSig)
         {
             _secListSig = sig;
             SectionList.Children.Clear();
-            foreach (var s in p.Sections)
+            foreach (var s in p.Sections.Where(x => Match(x.Name, sq)))
             {
                 var ss = s;
                 var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 2 };
@@ -1344,6 +1694,74 @@ public partial class MainWindow : Window
         }
     }
 
+
+    /// <summary>Immagine PNG della sezione su fondo bianco: titolo, disegno (con pedoni, ciclisti e auto) e legenda con le misure e la somma.</summary>
+    async Task SaveSectionPng()
+    {
+        if (_ed.SelectedSection is not { } sec || SectionDrawing.Result is not { } r) return;
+        var path = await PickSave("Salva sezione come immagine", "Immagine PNG", "png", (string.IsNullOrWhiteSpace(sec.Name) ? "sezione" : sec.Name) + ".png");
+        if (path == null) return;
+        try
+        {
+            var bmp = RenderSectionImage(sec, r);
+            bmp.Save(path);
+            Ok("Sezione salvata in " + path);
+        }
+        catch (Exception ex) { Fail("Non riesco a salvare l'immagine: " + ex.Message); }
+    }
+
+    public Avalonia.Media.Imaging.RenderTargetBitmap RenderSectionImage(CrossSection sec, SectionResult r)
+    {
+        var (page, size) = BuildSectionPage(sec, r);
+        // a 96 dpi (scala 1): con scale diverse alcune primitive del disegno uscivano fuori posto
+        var bmp = new Avalonia.Media.Imaging.RenderTargetBitmap(new Avalonia.PixelSize((int)Math.Ceiling(size.Width), (int)Math.Ceiling(size.Height)), new Avalonia.Vector(96, 96));
+        bmp.Render(page);
+        return bmp;
+    }
+
+    /// <summary>Pagina della sezione (titolo, disegno, legenda) pronta da disegnare, con la sua misura.</summary>
+    (Control page, Avalonia.Size size) BuildSectionPage(CrossSection sec, SectionResult r)
+    {
+        const double W = 2200;
+        IBrush ink = Brushes.Black, grey = new SolidColorBrush(Color.Parse("#FF5E6672")), line = new SolidColorBrush(Color.Parse("#FFD5D9DE"));
+        var root = new StackPanel { Spacing = 14, Width = W };
+        root.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(sec.Name) ? "Sezione" : sec.Name, FontSize = 24, FontWeight = FontWeight.Bold, Foreground = ink });
+        root.Children.Add(new SectionView { Light = true, TextScale = 1.7, Result = r, Section = sec, Height = 560, Width = W });
+        // legenda: numero, colore, nome, tipo, larghezza; poi la somma
+        var legend = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 12, RowSpacing = 6 };
+        int row = 0, n = 0;
+        void Add(Control c, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); legend.Children.Add(c); }
+        foreach (var x in r.Pieces)
+        {
+            n++;
+            legend.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            Add(new Border { Width = 24, Height = 24, CornerRadius = new Avalonia.CornerRadius(12), Background = new SolidColorBrush(Color.Parse("#FF2FCB79")),
+                Child = new TextBlock { Text = n.ToString(), FontSize = 13, FontWeight = FontWeight.Bold, Foreground = Brushes.Black, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center } }, 0);
+            Add(new Border { Width = 18, Height = 18, CornerRadius = new Avalonia.CornerRadius(3), Background = MapCanvas.Colors(x.Element!.Type, 255).fill, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, 1);
+            Add(new TextBlock { Text = x.Element.Name, FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = ink, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, 2);
+            Add(new TextBlock { Text = Element.TypeLabel(x.Element.Type) + (x.Inside is { } ins ? $" · dentro {ins.Name}" : ""), FontSize = 15, Foreground = grey, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, 3);
+            Add(new TextBlock { Text = M(x.Width), FontSize = 16, FontWeight = FontWeight.SemiBold, Foreground = ink, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, 4);
+            row++;
+        }
+        legend.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        var sep = new Avalonia.Controls.Shapes.Rectangle { Height = 1, Fill = line, Margin = new Avalonia.Thickness(0, 4) };
+        Grid.SetColumnSpan(sep, 5); Add(sep, 0); row++;
+        void Tot(string label, string value, bool bold)
+        {
+            legend.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var l = new TextBlock { Text = label, FontSize = 16, FontWeight = bold ? FontWeight.Bold : FontWeight.Normal, Foreground = bold ? ink : grey };
+            Grid.SetColumnSpan(l, 4); Add(l, 0);
+            Add(new TextBlock { Text = value, FontSize = 16, FontWeight = FontWeight.Bold, Foreground = ink, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right }, 4);
+            row++;
+        }
+        Tot($"Totale ({n} {(n == 1 ? "elemento" : "elementi")})", M(r.ElementsWidth), true);
+        if (r.BetweenBuildings is { } bb) Tot("Tra gli edifici", M(bb), false);
+        root.Children.Add(legend);
+        var page = new Border { Background = Brushes.White, Padding = new Avalonia.Thickness(32), Child = root };
+        page.Measure(new Avalonia.Size(W + 64, double.PositiveInfinity));
+        page.Arrange(new Avalonia.Rect(page.DesiredSize));
+        return (page, page.DesiredSize);
+    }
 
     // ───────────── Annulla / Ripeti ─────────────
     // Dopo ogni modifica completata si tiene una copia del progetto (come quando si salva): Annulla torna alla copia precedente.

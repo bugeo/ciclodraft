@@ -99,8 +99,9 @@ public partial class Editor
     public void PickAt(V2 w, bool add)
     {
         SelectedSection = null; VarSel = -1;
+        GroupSel.Clear();
         if (!add) { AreaParts.Clear(); MultiSel.Clear(); }
-        else if (!HasPick && Selected != null && Selected != ElementAt(w)) MultiSel.Add(Selected);
+        // (un elemento già selezionato non entra nella scelta delle aree: gli elementi disegnati vanno nei gruppi)
         Selected = null;
         if (ElementAt(w) is { } e)
         {
@@ -138,7 +139,7 @@ public partial class Editor
         catch { PickedRings.Clear(); }
     }
 
-    public void ClearPick() { AreaParts.Clear(); MultiSel.Clear(); PickedRings.Clear(); PickHole = false; }
+    public void ClearPick() { AreaParts.Clear(); MultiSel.Clear(); PickedRings.Clear(); PickHole = false; GroupSel.Clear(); }
 
     /// <summary>Perché non si possono creare gli elementi dalla scelta (null = si può).</summary>
     public string? PickBlocker()

@@ -3,7 +3,8 @@ using NetTopologySuite.Geometries;
 
 namespace CicloDraft.Model;
 
-public enum ElementType { Marciapiede, Ciclabile, Carreggiata, Corsia, Parcheggio, Aiuola, Separatore, CorsiaCiclabile, CorsiaDoppia }
+/// <summary>Indefinito: poligono appena disegnato, il tipo si sceglie dopo (sempre ultimo nell'elenco).</summary>
+public enum ElementType { Marciapiede, Ciclabile, Carreggiata, Corsia, Parcheggio, Aiuola, Separatore, CorsiaCiclabile, CorsiaDoppia, Ciclopedonale, Indefinito }
 
 /// <summary>Offset = larghezza impostata; Fill = riempie lo spazio fino a un secondo bordo.</summary>
 /// <summary>Offset/Fill = elementi «a tracciato» (bordo o interasse / riempimento); Polygon = poligono chiuso disegnato a mano.</summary>
@@ -104,6 +105,11 @@ public class ElementGroup
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public bool Visible { get; set; } = true;
+    /// <summary>Colore del blocco: il bordo dei suoi elementi sulla mappa.</summary>
+    public string Color { get; set; } = "#E6194B";
+
+    public static readonly string[] Palette =
+        { "#E6194B", "#3C8DFF", "#F58231", "#2BB673", "#B04FD8", "#00B8C4", "#F032B4", "#9BC53D", "#8C5A3C", "#FFC20E" };
 }
 
 public class Element
@@ -130,7 +136,9 @@ public class Element
     public double StallLength { get; set; } = 5.0;
     /// <summary>Marciapiede e aiuola: altezza sopra la strada (m).</summary>
     public double Height { get; set; } = 0.15;
-    public bool HasHeight => Type is ElementType.Marciapiede or ElementType.Aiuola;
+    public bool HasHeight => Type is ElementType.Marciapiede or ElementType.Aiuola or ElementType.Ciclopedonale;
+    /// <summary>Ciclopedonale: bici e pedoni separati da una striscia continua (false = percorso misto).</summary>
+    public bool Separated { get; set; }
 
     public bool HasStalls => Type == ElementType.Parcheggio && Mode == ElementMode.Offset && StallLines && Error == null && Guide.Count >= 2;
 
@@ -166,7 +174,8 @@ public class Element
         _ => 0
     };
 
-    public int EffectiveDividers => !SupportsDividers ? 0 : Dividers >= 0 ? Dividers : AutoDividers;
+    public int EffectiveDividers => Type == ElementType.Ciclopedonale ? (Separated && Mode != ElementMode.Polygon ? 1 : 0)
+        : !SupportsDividers ? 0 : Dividers >= 0 ? Dividers : AutoDividers;
 
     /// <summary>Le strisce di mezzeria: linee a k/(n+1) della larghezza, tra i due lati dell'elemento.</summary>
     // le strisce si ricalcolano solo se cambia la geometria (nuove liste Inner/Outer) o il numero
@@ -265,6 +274,11 @@ public class Element
 
     public double MaxProfileWidth => (Profile.Count == 0 ? Width : Math.Max(Width, Profile.Max(p => p.W))) + Variators.Sum(v => Math.Max(0, v.Delta));
 
+    /// <summary>Tipi che si possono scegliere, in ordine alfabetico (la corsia doppia non c'è più: è una carreggiata con una mezzeria).</summary>
+    public static readonly ElementType[] Choosable = Enum.GetValues<ElementType>()
+        .Where(t => t is not (ElementType.CorsiaDoppia or ElementType.Indefinito))
+        .OrderBy(TypeLabel, StringComparer.Create(new System.Globalization.CultureInfo("it-IT"), true)).ToArray();
+
     public static string TypeLabel(ElementType t) => t switch
     {
         ElementType.Marciapiede => "Marciapiede",
@@ -273,9 +287,11 @@ public class Element
         ElementType.Corsia => "Corsia",
         ElementType.Parcheggio => "Parcheggio",
         ElementType.Aiuola => "Aiuola / verde",
+        ElementType.Ciclopedonale => "Ciclopedonale",
         ElementType.Separatore => "Striscia gialla",
         ElementType.CorsiaCiclabile => "Corsia ciclabile",
         ElementType.CorsiaDoppia => "Corsia doppia",
+        ElementType.Indefinito => "Indefinito",
         _ => t.ToString()
     };
 
@@ -287,6 +303,7 @@ public class Element
         ElementType.Corsia => 3.00,
         ElementType.Parcheggio => 2.00,
         ElementType.Aiuola => 1.00,
+        ElementType.Ciclopedonale => 3.00,
         ElementType.Separatore => 0.50,
         ElementType.CorsiaCiclabile => 1.50,
         ElementType.CorsiaDoppia => 6.00,
@@ -294,8 +311,20 @@ public class Element
     };
 }
 
+/// <summary>Nota sulla mappa: un tratto a mano libera (penna) o un testo. Spessore e dimensione del testo in pixel sullo schermo.</summary>
+public class Annotation
+{
+    public bool IsText { get; set; }
+    public List<V2> Pts { get; set; } = new();
+    public string Color { get; set; } = "#E53935";
+    public double Size { get; set; } = 3;
+    public string Text { get; set; } = "";
+}
+
 public class Project
 {
+    /// <summary>Disegni a mano libera e note di testo sulla mappa.</summary>
+    public List<Annotation> Annotations { get; } = new();
     /// <summary>Linee di riferimento: quelle disegnate per ogni elemento (bordo o interasse) e i bordi strada dei progetti precedenti.</summary>
     public List<RoadEdge> Edges { get; } = new();
 
@@ -318,15 +347,17 @@ public class Project
 
     /// <summary>L'elemento è visibile (fuori da ogni blocco o in un blocco visibile). Gli elementi nascosti restano nel
     /// progetto (gli altri possono appoggiarsi a loro) ma non si vedono, non si selezionano e non vanno nelle esportazioni.</summary>
-    public bool IsShown(Element e) => e.Group == 0 || Groups.FirstOrDefault(g => g.Id == e.Group) is not { Visible: false };
+    /// <summary>Solo per le esportazioni (PDF): si vede soltanto questo gruppo (0 = solo gli elementi senza gruppo).</summary>
+    public int? OnlyGroup;
+    public bool IsShown(Element e) => OnlyGroup is { } og ? e.Group == og : e.Group == 0 || Groups.FirstOrDefault(g => g.Id == e.Group) is not { Visible: false };
     public IEnumerable<Element> Shown => Elements.Where(IsShown);
     /// <summary>La linea è visibile (non appartiene a un elemento nascosto).</summary>
     public bool IsShown(RoadEdge ed) => ed.Owner < 0 || Find(ed.Owner) is not { } o || IsShown(o);
     public string NewGroupName()
     {
         int n = Groups.Count + 1;
-        while (Groups.Any(g => g.Name == $"Blocco {n}")) n++;
-        return $"Blocco {n}";
+        while (Groups.Any(g => g.Name == $"Gruppo {n}")) n++;
+        return $"Gruppo {n}";
     }
 
     static readonly GeometryFactory Gf = new();

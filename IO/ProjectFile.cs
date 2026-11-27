@@ -23,12 +23,22 @@ public static class ProjectFile
         public List<PhotoDto>? Photos { get; set; }
         public List<SectionDto>? Sections { get; set; }
         public List<GroupDto>? Groups { get; set; }
+        public List<NoteDto>? Notes { get; set; }
+    }
+    public class NoteDto
+    {
+        public bool Text { get; set; }
+        public List<double[]> Pts { get; set; } = new();
+        public string Color { get; set; } = "#E53935";
+        public double Size { get; set; }
+        public string? Content { get; set; }
     }
     public class GroupDto
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public bool Visible { get; set; } = true;
+        public string? Color { get; set; }
     }
     public class SectionDto
     {
@@ -81,6 +91,7 @@ public static class ProjectFile
         public bool? StallLines { get; set; }
         public double? StallLength { get; set; }
         public double? Height { get; set; }
+        public bool? Separated { get; set; }
     }
 
     static readonly JsonSerializerOptions Opts = new()
@@ -101,7 +112,12 @@ public static class ProjectFile
             Origin = new[] { o.X, o.Y },
             NextId = p.NextId,
             ViewRotation = p.ViewRotation,
-            Groups = p.Groups.Count == 0 ? null : p.Groups.Select(g => new GroupDto { Id = g.Id, Name = g.Name, Visible = g.Visible }).ToList(),
+            Notes = p.Annotations.Count == 0 ? null : p.Annotations.Select(a => new NoteDto
+            {
+                Text = a.IsText, Color = a.Color, Size = a.Size, Content = a.IsText ? a.Text : null,
+                Pts = a.Pts.Select(v => new[] { v.X + o.X, v.Y + o.Y }).ToList()
+            }).ToList(),
+            Groups = p.Groups.Count == 0 ? null : p.Groups.Select(g => new GroupDto { Id = g.Id, Name = g.Name, Visible = g.Visible, Color = g.Color }).ToList(),
             Sections = p.Sections.Count == 0 ? null : p.Sections.Select(s => new SectionDto
             {
                 Id = s.Id, Name = s.Name, Flip = s.Flip,
@@ -133,7 +149,8 @@ public static class ProjectFile
                 Dividers = e.Dividers, DividerStyle = e.DividerStyle,
                 StallLines = e.Type == ElementType.Parcheggio ? e.StallLines : null,
                 StallLength = e.Type == ElementType.Parcheggio ? e.StallLength : null,
-                Height = e.HasHeight ? e.Height : null
+                Height = e.HasHeight ? e.Height : null,
+                Separated = e.Type == ElementType.Ciclopedonale ? e.Separated : null
             }).ToList()
         };
         return JsonSerializer.Serialize(dto, Opts);
@@ -213,11 +230,27 @@ public static class ProjectFile
                 Other = d.OtherKind is { } k && d.OtherId is { } id ? new EdgeRef(k, id) : null,
                 Centered = d.Centered, Dividers = d.Dividers, DividerStyle = d.DividerStyle,
                 StallLines = d.StallLines ?? true, StallLength = d.StallLength is > 0 ? d.StallLength.Value : 5.0,
-                Height = d.Height is >= 0 ? d.Height.Value : 0.15
+                Height = d.Height is >= 0 ? d.Height.Value : 0.15,
+                Separated = d.Separated ?? false
             });
             p.NextId = Math.Max(p.NextId, d.Id + 1);
         }
-        foreach (var g in dto.Groups ?? new()) p.Groups.Add(new ElementGroup { Id = g.Id, Name = g.Name, Visible = g.Visible });
+        // la corsia doppia non esiste più: diventa una carreggiata con una mezzeria tratteggiata
+        foreach (var e in p.Elements.Where(e => e.Type == ElementType.CorsiaDoppia))
+        {
+            e.Type = ElementType.Carreggiata;
+            if (e.Dividers < 0) { e.Dividers = 1; e.DividerStyle = DividerStyle.Tratteggiata; }
+            if (e.Name.StartsWith("Corsia doppia")) e.Name = "Carreggiata" + e.Name["Corsia doppia".Length..];
+        }
+        foreach (var n in dto.Notes ?? new())
+            if (n.Pts.Count > 0)
+                p.Annotations.Add(new Annotation
+                {
+                    IsText = n.Text, Color = n.Color, Size = n.Size > 0 ? n.Size : 3, Text = n.Content ?? "",
+                    Pts = n.Pts.Where(a => a.Length >= 2).Select(a => new V2(a[0] - origin.X, a[1] - origin.Y)).ToList()
+                });
+        foreach (var g in dto.Groups ?? new()) p.Groups.Add(new ElementGroup { Id = g.Id, Name = g.Name, Visible = g.Visible,
+            Color = g.Color ?? ElementGroup.Palette[p.Groups.Count % ElementGroup.Palette.Length] });
         foreach (var e in p.Elements) if (e.Group != 0 && p.Groups.All(g => g.Id != e.Group)) e.Group = 0;
         foreach (var sd in dto.Sections ?? new())
             if (sd.A is { Length: 2 } && sd.B is { Length: 2 })

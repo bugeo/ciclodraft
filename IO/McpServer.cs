@@ -133,7 +133,7 @@ public static class McpServer
         };
     }
 
-    static JsonArray TypeEnum() => new(Enum.GetNames<ElementType>().Select(n => (JsonNode)n).ToArray());
+    static JsonArray TypeEnum() => new(Element.Choosable.Select(t => (JsonNode)t.ToString()).ToArray());
 
     static JsonArray ToolList() => new(
         Tool("apri_progetto", "Apri progetto", "Apre un progetto CicloDraft (.ciclo) con il suo GeoPackage. Restituisce un riepilogo.",
@@ -142,6 +142,8 @@ public static class McpServer
                 ["percorso"] = Prop("string", "Percorso del file .ciclo"),
                 ["geopackage"] = Prop("string", "Percorso del GeoPackage, se non è dove lo indica il progetto (facoltativo)")
             }, new[] { "percorso" }),
+        Tool("progetti_recenti", "Progetti recenti", "I progetti e i GeoPackage aperti di recente nel programma CicloDraft (il primo è l'ultimo aperto): utile per trovare il file su cui l'utente sta lavorando.",
+            new JsonObject(), Array.Empty<string>(), readOnly: true),
         Tool("apri_geopackage", "Apri GeoPackage", "Inizia un progetto nuovo e vuoto su un GeoPackage (ruoli dei livelli proposti dal nome).",
             new JsonObject { ["percorso"] = Prop("string", "Percorso del file .gpkg") }, new[] { "percorso" }),
         Tool("elenco_livelli", "Livelli", "Livelli del GeoPackage aperto: nome, tipo di geometria, numero di elementi, ruolo e visibilità.",
@@ -150,6 +152,33 @@ public static class McpServer
             new JsonObject(), Array.Empty<string>(), readOnly: true),
         Tool("dettaglio_elemento", "Dettaglio elemento", "Tutti i dati di un elemento: misure, linea (inizio e fine), variatori di sezione, strisce, stalli del parcheggio.",
             new JsonObject { ["id"] = Prop("integer", "Id dell'elemento (da elenco_elementi)") }, new[] { "id" }, readOnly: true),
+        Tool("elenco_note", "Disegni e note sulla mappa",
+            "I tratti disegnati a mano dall'utente con la penna e le note di testo sulla mappa: id, tipo (tratto o testo), colore, punti [E, N] (i tratti sono semplificati), lunghezza, testo. " +
+            "L'utente li usa per indicare dove vuole qualcosa (es. «lungo la linea rossa voglio una ciclabile»): usa disegna_lungo_nota per trasformare un tratto in un elemento.",
+            new JsonObject(), Array.Empty<string>(), readOnly: true),
+        Tool("disegna_lungo_nota", "Disegna lungo un tratto",
+            "Disegna un nuovo elemento usando come linea un tratto fatto a mano dall'utente (da elenco_note). modalita: «bordo» (l'elemento sta da un lato del tratto), «interasse» (il tratto è l'asse: metà per parte) o «poligono» (il tratto è il contorno chiuso).",
+            new JsonObject
+            {
+                ["nota"] = Prop("integer", "Id del tratto (da elenco_note)"),
+                ["tipo"] = Prop("string", "Tipo di elemento", TypeEnum()),
+                ["modalita"] = Prop("string", "Come usare il tratto", new JsonArray("bordo", "interasse", "poligono")),
+                ["larghezza"] = Prop("number", "Larghezza in metri (facoltativa: predefinita per il tipo)"),
+                ["lato"] = Prop("string", "Solo per «bordo»: lato guardando il tratto dall'inizio alla fine (facoltativo)", new JsonArray("sinistra", "destra")),
+                ["semplifica"] = Prop("number", "Tolleranza di semplificazione del tratto in metri (predefinita 0,5)"),
+                ["aggancia"] = Prop("boolean", "Aggancia i punti a muri ed elementi vicini (predefinito: no)"),
+                ["nome"] = Prop("string", "Nome (facoltativo)"),
+                ["togli_nota"] = Prop("boolean", "Togli il tratto dalla mappa dopo aver disegnato l'elemento (predefinito: no)")
+            }, new[] { "nota", "tipo", "modalita" }),
+        Tool("aggiungi_nota", "Aggiungi nota", "Scrive una nota di testo sulla mappa (es. una spiegazione per l'utente) nel punto [E, N].",
+            new JsonObject
+            {
+                ["testo"] = Prop("string", "Testo della nota"),
+                ["punto"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "number" }, ["description"] = "[E, N]" },
+                ["colore"] = Prop("string", "Colore", new JsonArray("rosso", "arancione", "giallo", "verde", "blu", "viola", "nero", "bianco"))
+            }, new[] { "testo", "punto" }),
+        Tool("elimina_nota", "Elimina nota", "Toglie dalla mappa un tratto o una nota di testo.",
+            new JsonObject { ["nota"] = Prop("integer", "Id (da elenco_note)") }, new[] { "nota" }, destructive: true),
         Tool("totali", "Totali per tipo", "Superficie e lunghezza totali per tipo di elemento.",
             new JsonObject(), Array.Empty<string>(), readOnly: true),
         Tool("disegna_elemento", "Disegna elemento",
@@ -175,7 +204,8 @@ public static class McpServer
                 ["strisce"] = Prop("integer", "Numero di strisce di mezzeria; -1 = automatico"),
                 ["stile_strisce"] = Prop("string", "Tipo di strisce", new JsonArray("Tratteggiata", "Continua", "DoppiaContinua")),
                 ["linee_stalli"] = Prop("boolean", "Parcheggio: mostra le linee degli stalli"),
-                ["altezza"] = Prop("number", "Marciapiede o aiuola: altezza sopra la strada (m)"),
+                ["altezza"] = Prop("number", "Marciapiede, aiuola o ciclopedonale: altezza sopra la strada (m)"),
+                ["separata"] = Prop("boolean", "Ciclopedonale: true = bici e pedoni separati da una striscia, false = percorso misto"),
                 ["lunghezza_stalli"] = Prop("number", "Parcheggio: lunghezza dello stallo in metri")
             }, new[] { "id" }),
         Tool("aggiungi_variatore", "Aggiungi variatore di sezione",
@@ -233,6 +263,32 @@ public static class McpServer
                 var d = GpkgReader.Load(path);
                 Ed.SetData(d); _projectPath = null;
                 return new { aperto = path, sistema_di_riferimento = d.Crs, livelli = Layers() };
+            }
+            case "progetti_recenti":
+                return RecentFiles.Load().OrderByDescending(r => r.Pinned).ThenByDescending(r => r.Opened)
+                    .Select(r => new { percorso = r.Path, tipo = r.Kind, fissato = r.Pinned, aperto_il = r.Opened.ToString("yyyy-MM-dd HH:mm"), esiste = File.Exists(r.Path) }).ToList();
+            case "elenco_note": Need(); return Notes();
+            case "disegna_lungo_nota": Need(); return DrawAlongNote(a);
+            case "aggiungi_nota":
+            {
+                Need();
+                if (a["punto"] is not JsonArray pt || pt.Count < 2) throw new ToolError("punto deve essere [E, N].");
+                var o = Ed.Data!.Origin;
+                var n = new Annotation
+                {
+                    IsText = true, Text = Str(a, "testo"), Size = 16,
+                    Color = ColorOf(OptStr(a, "colore") ?? "blu"),
+                    Pts = new() { new V2(pt[0]!.GetValue<double>() - o.X, pt[1]!.GetValue<double>() - o.Y) }
+                };
+                Ed.Project.Annotations.Add(n);
+                return new { id = Ed.Project.Annotations.Count, testo = n.Text };
+            }
+            case "elimina_nota":
+            {
+                Need();
+                var n = NoteById(a);
+                Ed.Project.Annotations.Remove(n);
+                return new { eliminata = true };
             }
             case "elenco_livelli": Need(); return Layers();
             case "elenco_elementi": Need(); return Ed.Project.Elements.Select(Summary).ToList();
@@ -348,6 +404,62 @@ public static class McpServer
         };
     }
 
+    static readonly (string name, string hex)[] NoteColors =
+    {
+        ("rosso", "#E53935"), ("arancione", "#FB8C00"), ("giallo", "#FDD835"), ("verde", "#43A047"),
+        ("blu", "#1E88E5"), ("viola", "#8E24AA"), ("nero", "#212121"), ("bianco", "#FFFFFF")
+    };
+    static string ColorOf(string name) => NoteColors.FirstOrDefault(c => c.name == name.Trim().ToLowerInvariant()).hex ?? "#1E88E5";
+    static string ColorName(string hex) => NoteColors.FirstOrDefault(c => string.Equals(c.hex, hex, StringComparison.OrdinalIgnoreCase)).name ?? hex;
+
+    static Annotation NoteById(JsonObject a)
+    {
+        int id = (int)(OptNum(a, "nota") ?? 0);
+        if (id < 1 || id > Ed.Project.Annotations.Count) throw new ToolError($"Nota {id} inesistente: le note vanno da 1 a {Ed.Project.Annotations.Count}.");
+        return Ed.Project.Annotations[id - 1];
+    }
+
+    static object Notes()
+    {
+        var o = Ed.Data!.Origin;
+        double R(double v) => Math.Round(v, 2);
+        return Ed.Project.Annotations.Select((n, i) =>
+        {
+            var pts = n.IsText ? n.Pts : PL.Simplify(n.Pts, 0.5);
+            // elementi vicini al tratto (entro 5 m), per capire dove sta
+            var near = Ed.Project.Shown.Where(e => e.Polygon.Count >= 3 && pts.Any(p => PL.PointInRing(e.Polygon, p) || PL.Project(new List<V2>(e.Polygon) { e.Polygon[0] }, p).Distance < 5))
+                .Select(e => e.Name).Take(8).ToList();
+            return new
+            {
+                id = i + 1,
+                tipo = n.IsText ? "testo" : "tratto",
+                colore = ColorName(n.Color),
+                testo = n.IsText ? n.Text : null,
+                lunghezza_m = n.IsText ? (double?)null : R(PL.Length(n.Pts)),
+                chiuso = !n.IsText && n.Pts.Count > 2 && V2.Dist(n.Pts[0], n.Pts[^1]) < Math.Max(1.5, PL.Length(n.Pts) * 0.05),
+                punti = pts.Select(p => new[] { R(p.X + o.X), R(p.Y + o.Y) }).ToList(),
+                vicino_a = near
+            };
+        }).ToList();
+    }
+
+    static object DrawAlongNote(JsonObject a)
+    {
+        var n = NoteById(a);
+        if (n.IsText) throw new ToolError("Quella nota è un testo, non un tratto.");
+        var pts = PL.Simplify(n.Pts, Math.Max(0.05, OptNum(a, "semplifica") ?? 0.5));
+        bool poly = OptStr(a, "modalita") == "poligono";
+        if (poly && pts.Count > 3 && V2.Dist(pts[0], pts[^1]) < 2) pts.RemoveAt(pts.Count - 1);
+        if (pts.Count < 2) throw new ToolError("Il tratto è troppo corto.");
+        var o = Ed.Data!.Origin;
+        var args = (JsonObject)a.DeepClone();
+        args.Remove("nota"); args.Remove("semplifica"); args.Remove("togli_nota");
+        args["punti"] = new JsonArray(pts.Select(p => (JsonNode)new JsonArray(p.X + o.X, p.Y + o.Y)).ToArray());
+        var res = Draw(args);
+        if (OptBool(a, "togli_nota") == true) Ed.Project.Annotations.Remove(n);
+        return res;
+    }
+
     static object Draw(JsonObject a)
     {
         var t = ParseType(Str(a, "tipo"));
@@ -420,9 +532,14 @@ public static class McpServer
             if (e.Type != ElementType.Parcheggio) throw new ToolError("Gli stalli valgono solo per i parcheggi.");
             Ed.SetSelectedStalls(OptBool(a, "linee_stalli") ?? e.StallLines, OptNum(a, "lunghezza_stalli") ?? e.StallLength);
         }
+        if (OptBool(a, "separata") is { } sepv)
+        {
+            if (e.Type != ElementType.Ciclopedonale) throw new ToolError("«separata» vale solo per i ciclopedonali.");
+            Ed.SetSelectedSeparated(sepv);
+        }
         if (OptNum(a, "altezza") is { } hgt)
         {
-            if (!e.HasHeight) throw new ToolError("L'altezza vale solo per marciapiedi e aiuole.");
+            if (!e.HasHeight) throw new ToolError("L'altezza vale solo per marciapiedi, aiuole e ciclopedonali.");
             Ed.SetSelectedHeight(hgt);
         }
         Ed.Project.Regenerate();
@@ -475,6 +592,7 @@ public static class McpServer
             strisce = e.SupportsDividers ? new { numero = e.EffectiveDividers, automatico = e.Dividers < 0, stile = e.DividerStyle.ToString() } : null,
             stalli = e.Type == ElementType.Parcheggio ? new { linee = e.StallLines, lunghezza_m = R(e.StallLength) } : null,
             altezza_m = e.HasHeight ? R(e.Height) : (double?)null,
+            ciclopedonale = e.Type == ElementType.Ciclopedonale ? (e.Separated ? "separata" : "mista") : null,
             errore = e.Error
         };
     }
@@ -497,9 +615,9 @@ public static class McpServer
     }
 
     static ElementType ParseType(string s) =>
-        Enum.TryParse<ElementType>(s, true, out var t) ? t
+        Enum.TryParse<ElementType>(s, true, out var t) ? (t == ElementType.CorsiaDoppia ? ElementType.Carreggiata : t)
         : Enum.GetValues<ElementType>().FirstOrDefault(x => string.Equals(Element.TypeLabel(x), s, StringComparison.OrdinalIgnoreCase)) is var f && string.Equals(Element.TypeLabel(f), s, StringComparison.OrdinalIgnoreCase) ? f
-        : throw new ToolError($"Tipo sconosciuto «{s}». Tipi: {string.Join(", ", Enum.GetNames<ElementType>())}.");
+        : throw new ToolError($"Tipo sconosciuto «{s}». Tipi: {string.Join(", ", Element.Choosable)}.");
 
     static string Str(JsonObject a, string k) => OptStr(a, k) ?? throw new ToolError($"Manca il parametro «{k}».");
     static string? OptStr(JsonObject a, string k) => a[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

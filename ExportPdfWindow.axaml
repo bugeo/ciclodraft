@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="CicloDraft.ExportPdfWindow"
+        Title="CicloDraft · Esporta PDF"
+        Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel>
+    <Border Background="{StaticResource RailBackground}" Padding="16,12">
+      <TextBlock Text="Esporta PDF" FontWeight="SemiBold" FontSize="15" />
+    </Border>
+
+    <Border Classes="section">
+      <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="step" Text="GRUPPI" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+            <Button x:Name="AllBtn" Content="Tutti" FontSize="11" Padding="8,3" />
+            <Button x:Name="NoneBtn" Content="Nessuno" FontSize="11" Padding="8,3" />
+          </StackPanel>
+        </Grid>
+        <ScrollViewer MaxHeight="300">
+          <StackPanel x:Name="GroupList" Spacing="4" />
+        </ScrollViewer>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="section">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="step" Text="PAGINE" />
+        <CheckBox x:Name="SectionsCheck" FontSize="12" IsChecked="True" Content="Sezioni che attraversano il gruppo" />
+        <CheckBox x:Name="PhotosCheck" FontSize="12" IsChecked="True" Content="Fotoinserimenti che inquadrano il gruppo" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+          <TextBlock Classes="k" Text="Formato (orizzontale)" VerticalAlignment="Center" />
+          <ComboBox x:Name="FormatCombo" Grid.Column="1" Width="120" SelectedIndex="0" FontSize="12">
+            <ComboBoxItem Content="A3" />
+            <ComboBoxItem Content="A4" />
+          </ComboBox>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <Border Padding="14,12">
+      <StackPanel Spacing="8">
+        <TextBlock x:Name="StatusText" Classes="note" Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+          <Button x:Name="CloseBtn" Content="Chiudi" />
+          <Button x:Name="ExportBtn" Content="Esporta PDF…" Classes="accent" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</Window>

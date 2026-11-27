@@ -9,6 +9,74 @@ public partial class Editor
     /// <summary>Blocco in cui vanno i nuovi elementi (0 = nessuno).</summary>
     public int CurrentGroup;
 
+    /// <summary>Elementi scelti con Maiusc+clic, da mettere in un gruppo (nuovo o esistente).</summary>
+    public readonly List<Element> GroupSel = new();
+
+    /// <summary>Maiusc+clic: aggiunge o toglie l'elemento sotto il punto dalla scelta per i gruppi.</summary>
+    public void ToggleGroupSel(V2 w)
+    {
+        var e = ElementAt(w);
+        AreaParts.Clear(); MultiSel.Clear(); PickedRings.Clear(); SelectedSection = null;
+        if (GroupSel.Count == 0 && Selected != null && Selected != e) GroupSel.Add(Selected);
+        if (e != null) { if (!GroupSel.Remove(e)) GroupSel.Add(e); }
+        Selected = null; VarSel = -1;
+        Message = GroupSel.Count == 0 ? "" : $"{GroupSel.Count} {(GroupSel.Count == 1 ? "elemento scelto" : "elementi scelti")}: «Crea gruppo» o «Aggiungi a gruppo».";
+        NotifyAll();
+    }
+
+    /// <summary>Nuovo gruppo con gli elementi scelti.</summary>
+    public ElementGroup GroupFromSelection()
+    {
+        var g = new ElementGroup { Id = NextGroupId(), Name = Project.NewGroupName(), Color = NextGroupColor() };
+        Project.Groups.Add(g);
+        foreach (var e in GroupSel) e.Group = g.Id;
+        Message = $"«{g.Name}» creato con {GroupSel.Count} {(GroupSel.Count == 1 ? "elemento" : "elementi")}.";
+        GroupSel.Clear();
+        CurrentGroup = g.Id;
+        NotifyAll();
+        return g;
+    }
+
+    /// <summary>Mette gli elementi scelti in un gruppo esistente.</summary>
+    public void AddSelectionToGroup(ElementGroup g)
+    {
+        int n = GroupSel.Count;
+        foreach (var e in GroupSel) e.Group = g.Id;
+        GroupSel.Clear();
+        if (!g.Visible) { g.Visible = true; Project.Regenerate(); }
+        Message = $"{n} {(n == 1 ? "elemento aggiunto" : "elementi aggiunti")} a «{g.Name}».";
+        NotifyAll();
+    }
+
+    /// <summary>Gruppo a cui si stanno aggiungendo elementi col clic sulla mappa (0 = nessuno).</summary>
+    public int AssignGroup;
+
+    /// <summary>Un colore non ancora usato dagli altri blocchi.</summary>
+    string NextGroupColor()
+    {
+        foreach (var c in ElementGroup.Palette)
+            if (Project.Groups.All(g => !string.Equals(g.Color, c, StringComparison.OrdinalIgnoreCase))) return c;
+        return ElementGroup.Palette[Project.Groups.Count % ElementGroup.Palette.Length];
+    }
+
+    /// <summary>Accende o spegne l'aggiunta di elementi al blocco col clic sulla mappa.</summary>
+    public void ToggleAssign(ElementGroup g)
+    {
+        AssignGroup = AssignGroup == g.Id ? 0 : g.Id;
+        if (AssignGroup != 0) { Selected = null; ClearPick(); if (!g.Visible) { g.Visible = true; Project.Regenerate(); } }
+        Message = AssignGroup != 0 ? $"Modifica di «{g.Name}»: clic sugli elementi per aggiungerli o toglierli, poi «Salva gruppo»." : $"«{g.Name}» salvato: {Project.Elements.Count(x => x.Group == g.Id)} elementi.";
+        NotifyAll();
+    }
+
+    /// <summary>Clic sulla mappa mentre si aggiungono elementi a un blocco: l'elemento entra nel blocco (o ne esce se c'era già).</summary>
+    public void AssignAt(V2 w)
+    {
+        if (FindGroup(AssignGroup) is not { } g || ElementAt(w) is not { } e) return;
+        e.Group = e.Group == g.Id ? 0 : g.Id;
+        Message = e.Group == g.Id ? $"{e.Name} è in «{g.Name}»." : $"{e.Name} tolto da «{g.Name}».";
+        NotifyAll();
+    }
+
     public ElementGroup? FindGroup(int id) => id == 0 ? null : Project.Groups.FirstOrDefault(g => g.Id == id);
 
     /// <summary>Il nuovo elemento entra nel blocco corrente (se esiste ed è visibile).</summary>
@@ -19,7 +87,7 @@ public partial class Editor
     /// <summary>Nuovo blocco; gli elementi selezionati (uno o più) ci vengono spostati. Diventa il blocco corrente.</summary>
     public ElementGroup NewGroup()
     {
-        var g = new ElementGroup { Id = NextGroupId(), Name = Project.NewGroupName() };
+        var g = new ElementGroup { Id = NextGroupId(), Name = Project.NewGroupName(), Color = NextGroupColor() };
         Project.Groups.Add(g);
         foreach (var e in SelectedElements()) e.Group = g.Id;
         CurrentGroup = g.Id;
@@ -76,6 +144,7 @@ public partial class Editor
         foreach (var e in Project.Elements.Where(e => e.Group == g.Id)) e.Group = 0;
         Project.Groups.Remove(g);
         if (CurrentGroup == g.Id) CurrentGroup = 0;
+        if (AssignGroup == g.Id) AssignGroup = 0;
         Project.Regenerate();
         NotifyAll();
     }
@@ -90,7 +159,7 @@ public partial class Editor
         int k = 2;
         string baseName = System.Text.RegularExpressions.Regex.Replace(g.Name, @" – versione \d+$", "");
         while (Project.Groups.Any(x => x.Name == $"{baseName} – versione {k}")) k++;
-        var ng = new ElementGroup { Id = NextGroupId(), Name = $"{baseName} – versione {k}" };
+        var ng = new ElementGroup { Id = NextGroupId(), Name = $"{baseName} – versione {k}", Color = NextGroupColor() };
 
         // copia profonda passando per il formato del progetto (stesse regole di salvataggio e caricamento)
         var origin = Data?.Origin ?? new V2(0, 0);
