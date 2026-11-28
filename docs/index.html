@@ -335,7 +335,7 @@ footer a{color:var(--grigio)}
   <div class="wrap">
     <div class="intro">
       <span class="etichetta">Come funziona</span>
-      <h2>Dati aperti, coordinate reali, un progetto leggero</h2>
+      <h2>Dati aperti, coordinate reali, un progetto da condividere</h2>
       <p>CicloDraft disegna sopra la cartografia ufficiale e salva soltanto il progetto. Ecco che cosa legge, come lo converte e che cosa scrive.</p>
     </div>
     <div class="tecnica">
@@ -364,14 +364,14 @@ Nord = M(φ₀) · Δφ</pre>
       </div>
       <div class="scheda">
         <small>Condividere</small>
-        <h3>Spostare un progetto</h3>
-        <p>Servono <b>sia il <code>.ciclo</code> sia il <code>.gpkg</code></b>: il primo è il disegno, il secondo la cartografia su cui è disegnato. Con i fotoinserimenti servono anche le foto con i loro file.</p>
+        <h3>Il pacchetto <code>.cicloz</code></h3>
+        <p>Per riaprire un progetto altrove servono <b>il <code>.ciclo</code>, il <code>.gpkg</code></b> e, se ci sono, le foto dei fotoinserimenti con i loro file. <i>File → Condividi progetto</i> li mette tutti in <b>un solo file <code>.cicloz</code></b>, uno zip da mandare come allegato.</p>
         <ol>
-          <li>metti tutto in una cartella;</li>
-          <li>comprimila in uno <code>.zip</code> e inviala;</li>
-          <li>chi la riceve apre il <code>.ciclo</code> con <i>File → Apri progetto</i>.</li>
+          <li>chi lo riceve lo apre con un doppio clic o con <i>File → Apri progetto</i>;</li>
+          <li>sceglie dove metterlo: il programma crea una cartella con il nome del progetto ed estrae tutto;</li>
+          <li>da lì è un progetto normale, che si salva nella sua cartella.</li>
         </ol>
-        <p>Non c'è un'importazione: il GeoPackage e le foto si cercano da soli nella cartella del progetto, anche passando da Windows a Mac. Le esportazioni (DXF, CSV, GLB, PDF) servono agli altri programmi e non si riaprono.</p>
+        <p>Dentro ci sono il progetto, il GeoPackage intero, la cartella <code>foto</code> e <code>info.json</code> con versione e contenuto del pacchetto. Le esportazioni (DXF, CSV, GLB, PDF) invece servono agli altri programmi e non si riaprono.</p>
       </div>
     </div>
     <p class="altro">La spiegazione completa è nel wiki: <a href="https://github.com/bugeo/ciclodraft/wiki/Come-funziona">Come funziona: dati e file</a>.</p>
