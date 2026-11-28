@@ -870,7 +870,7 @@ public partial class MainWindow : Window
             var gp = dto.GpkgPath;
             if (gp == null || !File.Exists(gp))
             {
-                var alt = gp != null ? Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileName(gp)) : null;
+                var alt = gp != null ? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, ProjectFile.AnyFileName(gp)) : null;
                 if (alt != null && File.Exists(alt)) gp = alt;
                 else
                 {

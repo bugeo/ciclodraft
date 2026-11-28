@@ -18,10 +18,10 @@ partendo da un GeoPackage con i muri delle abitazioni, ed esportare il progetto 
   ```
   Poi si apre con un normale doppio clic. Per la rimozione delle auto copia la cartella `modelli`
   accanto a `CicloDraft.app` (nella stessa cartella).
-- **Da sorgente** (Windows, macOS, Linux): installa .NET 8 SDK, poi nella cartella `CicloDraft`
+- **Da sorgente** (Windows, macOS, Linux): installa .NET 8 SDK, poi nella cartella `src` del repository
   esegui `dotnet run -c Release`.
   Con **Visual Studio 2022** (17.8 o successivo, carico di lavoro *Sviluppo di applicazioni desktop .NET*) apri
-  `CicloDraft.sln` e premi F5; con Rider o VS Code basta aprire la stessa soluzione o la cartella.
+  `CicloDraft.sln` (nella cartella principale del repository, sopra `src`) e premi F5; con Rider o VS Code basta aprire la stessa soluzione o la cartella.
 - Per provare subito ci sono due GeoPackage in `samples`:
   - `esempio_via.gpkg`: via dritta di 200 m con edifici sui due lati (EPSG:3003);
   - `esempio_curve.gpkg`: via di circa 265 m con curve leggere, un restringimento graduale
@@ -569,12 +569,132 @@ fotoinserimento hanno il loro *Reset*.
 *Salva con nome…* lo salva in un altro file. Se chiudi la finestra con modifiche non salvate, il programma
 lo segnala e propone **Salva**, **Non salvare** o **Annulla** (resta nel programma).
 
+## Dati e file: come funziona
+
+### Perché si parte da un GeoPackage
+
+- **È il formato standard dei dati geografici vettoriali** (standard OGC). QGIS, ArcGIS, GDAL, AutoCAD Map
+  e i portali cartografici delle regioni lo leggono e lo scrivono. Molti comuni e regioni distribuiscono già il
+  DBGT in GeoPackage, oppure in shapefile, che *Ritaglia dati* converte.
+- **Un solo file** contiene tutti i livelli (edifici, marciapiedi, assi stradali, alberi…) con i loro attributi
+  e il sistema di riferimento. Non ci sono file accessori da tenere insieme, come per lo shapefile
+  (`.shp`, `.dbf`, `.shx`, `.prj`).
+- **Coordinate reali**: si disegna nella stessa posizione della cartografia ufficiale. Il DXF esportato si
+  sovrappone senza spostamenti alla carta tecnica, alle ortofoto e agli altri progetti.
+- **Si legge senza programmi esterni**: è un database SQLite, che CicloDraft apre direttamente e in sola lettura.
+
+### Che cosa contiene un file `.gpkg`
+
+Un GeoPackage è un database **SQLite** con alcune tabelle fissate dallo standard:
+
+| Tabella | Contenuto |
+|---|---|
+| `gpkg_spatial_ref_sys` | i sistemi di riferimento usati: codice EPSG (es. 3003, 6707, 32632) e definizione WKT |
+| `gpkg_contents` | l'elenco dei livelli, con l'estensione di ciascuno |
+| `gpkg_geometry_columns` | per ogni livello: la colonna con la geometria, il tipo (punti, linee, poligoni) e il sistema di riferimento |
+| una tabella per livello | una riga per oggetto: la geometria e gli attributi (codici, nomi, altezze…) |
+| `rtree_<livello>_<colonna>` | l'indice spaziale, per trovare in fretta gli oggetti di una zona |
+
+La **geometria** di ogni oggetto è un blob binario. Comincia con un'intestazione di 8 byte (`GP`, versione,
+indicatori, codice del sistema di riferimento), seguita a volte dal rettangolo che lo contiene, poi dalla
+geometria vera e propria in formato **WKB** (*Well-Known Binary*): punti, linee o poligoni con i buchi, con coordinate
+X, Y ed eventualmente Z.
+
+Che cosa ne fa CicloDraft:
+- legge i livelli di **linee e poligoni**; dei livelli di **punti** tiene solo gli **alberi**, che servono per il 3D;
+- cerca una colonna con l'**altezza** degli edifici (DBGT: `UN_VOL_AV`; altrimenti `ALTEZZA`, `HEIGHT`,
+  `ALT_GRONDA`…) per il 3D e per il fotoinserimento;
+- se un livello contiene **più classi in una sola tabella** (colonna `codice_classe`, `classe`, `categoria`…), lo
+  divide in un livello per classe, così edifici e marciapiedi possono avere ruoli diversi;
+- **non modifica mai** il GeoPackage: lo apre in sola lettura. Il progetto si salva a parte, nel file `.ciclo`.
+
+### Coordinate e conversione in metri
+
+CicloDraft misura tutto in **metri**: larghezze, superfici, quote e tolleranze di aggancio.
+
+- **Sistema proiettato** (il caso normale: Gauss-Boaga EPSG:3003/3004, UTM ETRS89 EPSG:25832/25833, RDN2008
+  EPSG:6707/7791, WGS84/UTM 32632/32633…). Le coordinate sono già in metri e si usano così come sono.
+  Nessuna conversione, nessuna perdita di precisione.
+- **Coordinate geografiche** in gradi (EPSG:4326, longitudine e latitudine). Il programma le proietta in metri con
+  una **proiezione locale equirettangolare**, centrata sul centro dei dati:
+
+  `Est = N(φ₀) · cos φ₀ · Δλ`  `Nord = M(φ₀) · Δφ`
+
+  dove Δλ e Δφ sono le differenze in radianti dal centro e N e M sono i raggi di curvatura dell'ellissoide
+  WGS84 alla latitudine centrale φ₀ (primo verticale e meridiano). Su un'area di un paio di chilometri l'errore
+  di scala resta sotto il due per diecimila, cioè meno di 20 cm per chilometro. In questo caso però il DXF non è
+  georiferito, perché resta in metri locali. Per lavorare in coordinate ufficiali conviene riproiettare prima il
+  file in QGIS (*Esporta → Salva elementi con nome*, scegliendo per esempio EPSG:6707).
+- **Origine locale**: le coordinate proiettate sono numeri grandi (per esempio 1.514.100 / 5.034.000). Per
+  disegnare e calcolare, il programma sottrae a tutte un'**origine**, cioè il centro dei dati arrotondato a 100 m.
+  All'interno lavora quindi con numeri piccoli, che le schede grafiche gestiscono senza perdere i centimetri.
+  L'origine si salva nel progetto. Nel `.ciclo`, nel DXF e nel CSV le coordinate tornano **assolute**, nel
+  sistema del GeoPackage.
+- Se i livelli usano **sistemi di riferimento diversi**, vale quello del primo e il programma lo segnala.
+  Un sistema in **piedi** (es. *State Plane* americani) non viene convertito.
+
+### Il file `.ciclo`
+
+È un file di testo **JSON**, leggibile e confrontabile anche con git. **Non contiene la cartografia**: fa
+riferimento al GeoPackage e salva soltanto il progetto. Per questo è leggero (di solito da pochi KB a qualche
+centinaio di KB).
+
+| Voce | Contenuto |
+|---|---|
+| `GpkgPath` | percorso del GeoPackage usato |
+| `Origin` | origine locale (Est, Nord) |
+| `LayerRoles`, `HiddenLayers` | ruolo di ogni livello (per nome) e livelli nascosti |
+| `Edges` | le linee disegnate (bordi, interassi, contorni dei poligoni), in coordinate assolute; per ogni punto anche l'aggancio a un altro elemento (`El`, `S`) e l'eventuale curva di Bézier (`Curve`, `Hx`, `Hy`) |
+| `Elements` | gli elementi: nome, tipo, modalità (`Offset` = tracciato, `Fill` = riempimento, `Polygon` = poligono), linea di riferimento, tratto (`Start`/`End`), lato, larghezza, profilo delle larghezze, variatori di sezione, strisce, stalli, altezza, gruppo |
+| `Groups` | gruppi: nome, colore, visibilità |
+| `Sections` | sezioni stradali: punti A e B, verso |
+| `Photos` | fotoinserimenti: percorso della foto, anche relativo alla cartella del progetto |
+| `Notes` | tratti a penna e note di testo sulla mappa |
+| `ViewRotation`, `NextId`, `Version` | rotazione della vista, contatore degli identificativi, versione del formato |
+
+Gli elementi sono **parametrici**: nel file non c'è il poligono finale, ma la ricetta per costruirlo (*questa linea,
+questo lato, questa larghezza, questi variatori*). Alla riapertura il programma ricalcola i contorni. Per questo,
+se cambia un elemento, quelli agganciati lo seguono.
+
+**Accanto a ogni foto** del fotoinserimento ci sono altri file con lo stesso nome della foto:
+`foto.fotoinserimento.json` (punti di controllo, fotocamera calcolata, deformazione), `foto.maschera.png` (ciò che
+sta davanti al progetto) e `foto.senza_auto.png` (la foto ripulita dalle auto). Non stanno dentro il `.ciclo`: vanno
+tenuti con la foto.
+
+### Spostare, condividere, riaprire un progetto
+
+Per riaprire un progetto su un altro computer servono **sia il `.ciclo` sia il `.gpkg`**. Il `.ciclo` contiene il
+disegno, il GeoPackage la cartografia su cui è disegnato. Senza il GeoPackage mancherebbero gli edifici, i ruoli
+dei livelli e l'origine delle coordinate.
+
+Il modo più semplice:
+
+1. metti in **una sola cartella** il `.ciclo`, il suo `.gpkg` e, se ci sono fotoinserimenti, le foto con i loro file
+   `*.fotoinserimento.json`, `*.maschera.png` e `*.senza_auto.png`;
+2. comprimi la cartella in uno `.zip` e inviala;
+3. chi la riceve la estrae dove vuole e apre il `.ciclo` con *File → Apri progetto…*.
+
+All'apertura il GeoPackage viene cercato prima nel percorso salvato, poi **nella cartella del progetto** con lo stesso
+nome. Se non lo trova, il programma chiede dov'è. Le foto si cercano allo stesso modo: percorso salvato, percorso
+relativo alla cartella del progetto, poi la cartella del progetto. Va bene anche passare da Windows a Mac e
+viceversa.
+
+- Non serve un'*importazione*: il `.ciclo` si apre e basta. Le **esportazioni** (DXF, CSV, GLB, PDF) servono per
+  altri programmi e non si riaprono in CicloDraft.
+- Si può indicare un **GeoPackage diverso**, per esempio un ritaglio più ampio o una versione aggiornata della
+  cartografia, purché sia **nello stesso sistema di riferimento**. I ruoli si ritrovano dai nomi dei livelli.
+- Il GeoPackage non viene mai modificato: più progetti possono usare lo stesso file.
+- La cartella `modelli` (rimozione delle auto) non fa parte del progetto: va accanto al programma, non accanto al
+  `.ciclo`.
+
 ## Licenza
 
 CicloDraft è software libero: puoi ridistribuirlo e modificarlo secondo i termini della GNU General
 Public License, versione 3 o (a tua scelta) successiva. Il testo completo è nel file `LICENSE`.
 
 ## Struttura del codice
+
+Nel repository il codice sta nella cartella `src` e il sito web nella cartella `docs`; i percorsi qui sotto sono dentro `src`.
 
 | Cartella | Contenuto |
 |---|---|

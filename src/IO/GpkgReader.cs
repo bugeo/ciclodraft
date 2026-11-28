@@ -202,12 +202,15 @@ public static class GpkgReader
         {
             var all = BBox.Of(raw.SelectMany(r => r.rings.SelectMany(x => x.pts)));
             double lon0 = (all.MinX + all.MaxX) / 2, lat0 = (all.MinY + all.MaxY) / 2;
-            double k = Math.Cos(lat0 * Math.PI / 180);
-            proj = (x, y) => new V2(R * k * (x - lon0) * Math.PI / 180, R * (y - lat0) * Math.PI / 180);
+            // raggi dell'ellissoide WGS84 alla latitudine centrale: N (primo verticale, per Est) e M (meridiano, per Nord)
+            const double E2 = 0.00669437999014;
+            double sl = Math.Sin(lat0 * Math.PI / 180), w = 1 - E2 * sl * sl;
+            double kx = R / Math.Sqrt(w) * Math.Cos(lat0 * Math.PI / 180) * Math.PI / 180, ky = R * (1 - E2) / (w * Math.Sqrt(w)) * Math.PI / 180;
+            proj = (x, y) => new V2(kx * (x - lon0), ky * (y - lat0));
             foreach (var (_, rings) in raw)
                 foreach (var (pts, _) in rings)
                     for (int i = 0; i < pts.Count; i++)
-                        pts[i] = new V2(R * k * (pts[i].X - lon0) * Math.PI / 180, R * (pts[i].Y - lat0) * Math.PI / 180);
+                        pts[i] = proj(pts[i].X, pts[i].Y);
         }
 
         var box = BBox.Of(raw.SelectMany(r => r.rings.SelectMany(x => x.pts)));

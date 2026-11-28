@@ -162,14 +162,20 @@ public static class ProjectFile
     }
 
     /// <summary>Foto del progetto: percorso salvato, oppure relativo alla cartella del progetto, oppure accanto al progetto.</summary>
+    /// <summary>Nome del file da un percorso scritto su Windows o su Mac/Linux (le barre di entrambi valgono come separatori).</summary>
+    public static string AnyFileName(string path) => path.Split('\\', '/').LastOrDefault(x => x.Length > 0) ?? path;
+
+    /// <summary>Percorso relativo salvato su un altro sistema: si usano i separatori di questo.</summary>
+    public static string LocalRel(string rel) => rel.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+
     public static void LoadPhotos(Dto dto, Project p, string projectPath, V2 origin)
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(projectPath)) ?? "";
         foreach (var f in dto.Photos ?? new())
         {
             string path = f.Path;
-            if (!File.Exists(path) && f.RelPath != null && File.Exists(Path.Combine(dir, f.RelPath))) path = Path.GetFullPath(Path.Combine(dir, f.RelPath));
-            if (!File.Exists(path) && File.Exists(Path.Combine(dir, Path.GetFileName(f.Path)))) path = Path.Combine(dir, Path.GetFileName(f.Path));
+            if (!File.Exists(path) && f.RelPath != null && File.Exists(Path.Combine(dir, LocalRel(f.RelPath)))) path = Path.GetFullPath(Path.Combine(dir, LocalRel(f.RelPath)));
+            if (!File.Exists(path) && File.Exists(Path.Combine(dir, AnyFileName(f.Path)))) path = Path.Combine(dir, AnyFileName(f.Path));
             var r = new PhotoInsertRef { Path = path, Name = f.Name };
             RefreshPhoto(r, origin);
             p.Photos.Add(r);

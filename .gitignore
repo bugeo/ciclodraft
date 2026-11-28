@@ -1,3 +1,13 @@
+# Nel repository vanno solo i sorgenti (src), il sito (docs) e i file qui sotto:
+# tutto il resto della cartella (eseguibili, zip, mac, modelli, samples di lavoro, script, wiki...) resta solo sul computer.
+/*
+!/src/
+!/docs/
+!/README.md
+!/LICENSE
+!/.gitignore
+!/CicloDraft.sln
+
 # compilazione
 bin/
 obj/
@@ -8,12 +18,13 @@ pub/
 .vscode/
 .idea/
 
-# modelli per la rimozione delle auto (circa 350 MB): vanno scaricati a parte nella cartella "modelli"
-modelli/
-
 # file pesanti generati
 *.glb
 *.zip
+*.tar.gz
+
+# modelli per la rimozione delle auto (circa 350 MB): vanno scaricati a parte nella cartella "modelli"
+modelli/
 
 # sistema
 .DS_Store
