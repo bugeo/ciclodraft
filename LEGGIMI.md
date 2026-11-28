@@ -20,6 +20,8 @@ partendo da un GeoPackage con i muri delle abitazioni, ed esportare il progetto 
   accanto a `CicloDraft.app` (nella stessa cartella).
 - **Da sorgente** (Windows, macOS, Linux): installa .NET 8 SDK, poi nella cartella `CicloDraft`
   esegui `dotnet run -c Release`.
+  Con **Visual Studio 2022** (17.8 o successivo, carico di lavoro *Sviluppo di applicazioni desktop .NET*) apri
+  `CicloDraft.sln` e premi F5; con Rider o VS Code basta aprire la stessa soluzione o la cartella.
 - Per provare subito ci sono due GeoPackage in `samples`:
   - `esempio_via.gpkg`: via dritta di 200 m con edifici sui due lati (EPSG:3003);
   - `esempio_curve.gpkg`: via di circa 265 m con curve leggere, un restringimento graduale
@@ -52,12 +54,13 @@ partendo da un GeoPackage con i muri delle abitazioni, ed esportare il progetto 
 
 In alto ci sono i menu: **File** (Apri progetto, Apri GeoPackage, Ritaglia dati, Salva, Salva con nome),
 **Modifica** (Annulla, Ripeti),
-**Esporta** (DXF, 3D, CSV) e **Visualizza** (*Etichette con i nomi degli elementi*
+**Esporta** (DXF, 3D, CSV, PDF) e **Visualizza** (*Etichette con i nomi degli elementi*
 sulla mappa, attive o no; DXF con o senza contesto, con o senza etichette). Il riquadro con la **cornice verde** è quello su cui agire adesso (stessi colori e stessa
-guida di SpeedVision). A sinistra stanno *Livelli*, *Elementi*, *Fotoinserimenti*, *Sezioni* e *Totali per tipo*. I riquadri per
+guida di SpeedVision). A sinistra stanno *Livelli*, poi le schede **Gruppi (n) · Foto ins. (n) · Sezioni (n) · Elementi (n)** (tra
+parentesi quante voci ci sono; si vede un riquadro alla volta) e in fondo *Totali per tipo*. I riquadri per
 aggiungere o modificare un elemento compaiono a destra, sopra la mappa, solo quando servono: la mappa
-resta sempre a tutta larghezza. Sulla mappa: **Adatta vista** in
-alto a sinistra e **+ Aggiungi elemento** in alto al centro.
+resta sempre a tutta larghezza. Sulla mappa: **+ Aggiungi elemento** in alto al centro; in basso a destra **3D**, **Adatta vista**, la rotazione
+e gli strumenti penna e testo.
 
 1. **Avvio** – al centro della mappa: *Apri progetto…* (un `.ciclo` salvato) oppure
    *Apri GeoPackage…* (anche dal menu File, Ctrl+O apre un progetto, Ctrl+S salva). Aprendo un
@@ -74,24 +77,30 @@ alto a sinistra e **+ Aggiungi elemento** in alto al centro.
    Ruoli e visibilità si salvano nel progetto.
 3. **Aggiungi elemento** – il pulsante in alto sulla mappa (o **+ Nuovo** nel riquadro *Elementi*, verde
    con il riquadro incorniciato finché non c'è ancora nessun elemento) apre il riquadro a destra, sopra la
-   mappa (✕ lo chiude; dopo «Disegna» si chiude da solo). All'inizio chiede solo **Tracciato** o **Poligono**:
-   - **Poligono**: si comincia subito a disegnare il contorno chiuso dell'elemento (un'aiuola, un'isola, una
-     piazzola): clic su ogni vertice, doppio clic o Invio per chiuderlo. **Appena chiuso il poligono si salva**
-     e resta selezionato. L'elemento si sceglie nella tendina mentre disegni (se non lo scegli vale l'ultimo
-     usato) e si può sempre cambiare da *Elemento selezionato*. Di un poligono si misurano superficie e
-     perimetro.
-   - **Tracciato**: l'elemento si sviluppa lungo una linea. Scegli cosa disegni e premi **Disegna sulla mappa**:
+   mappa (✕ lo chiude; dopo «Salva» si chiude da solo). Per prima cosa chiede il **tipo di elemento**
+   (marciapiede, pista ciclabile, carreggiata…, ognuno con il suo colore); poi come disegnarlo, **Tracciato** o
+   **Poligono**:
+   - **Poligono**: il contorno chiuso dell'elemento (un'aiuola, un'isola, una piazzola): clic su ogni vertice,
+     doppio clic o Invio per chiuderlo. **Appena chiuso il poligono si salva** e resta selezionato. Di un poligono
+     si misurano superficie e perimetro.
+   - **Tracciato**: l'elemento si sviluppa lungo una linea. Compaiono tre pulsanti; un clic su uno di loro
+     vale subito e il disegno parte:
      - **Bordo**: l'elemento sta da un lato della linea (es. un marciapiede lungo i muri, una ciclabile lungo
        un marciapiede). Dopo il disegno il programma propone il lato libero; *Inverti lato* se serve.
-     - **Interasse**: l'elemento sta metà per parte (es. carreggiata, corsia doppia).
+     - **Interasse**: l'elemento sta metà per parte (es. carreggiata).
      - **Riempimento**: occupa lo spazio tra due elementi già disegnati: clicca il contorno del primo,
        scegli il tratto, poi il contorno del secondo.
 
-   Scelta la modalità compaiono *Aggancia* e *Segui il contorno*. Durante il disegno: clic per ogni punto,
+   Il poligono si comincia a disegnare subito; per il tracciato il disegno parte con il clic su Bordo,
+   Interasse o Riempimento. Il titolo del riquadro mostra il percorso delle scelte, per esempio
+   «Aggiungi › Pista ciclabile › Tracciato › Bordo»: clic su una voce per tornare a quella scelta. Se annulli il
+   disegno (Esc) torni alla scelta della modalità, con lo stesso tipo. Mentre disegni compaiono
+   *Aggancia* e *Segui il contorno*. Durante il disegno: clic per ogni punto,
    doppio clic o Invio per finire, Backspace per togliere l'ultimo, Esc per annullare.
-   Per un tracciato, **alla fine** si sceglie l'**elemento** (marciapiede, pista ciclabile, carreggiata…) nella
-   tendina: finché non è scelto, *Disegna* resta spento. Per un tracciato imposta anche la larghezza (quella predefinita
-   segue l'elemento scelto); controlla l'anteprima e premi **Disegna**. In entrambe le modalità:
+   Finito il disegno premi **Salva** (o doppio clic, o Invio): l'elemento si salva subito, con la larghezza
+   predefinita del tipo e dal lato proposto, e si apre *Elemento selezionato*, dove cambi larghezza, lato
+   (*Inverti lato*), linea e tutto il resto. Per il riempimento l'elemento si salva appena scegli il secondo
+   contorno. In entrambe le modalità:
    - *Aggancia*: il punto si attacca a vertici e lati dei muri, dei marciapiedi esistenti e degli
      **elementi già disegnati** (quadrato = vertice, X = lato).
    - *Segui il contorno*: con due clic sullo stesso edificio o elemento, la linea ne segue il profilo
@@ -100,38 +109,48 @@ alto a sinistra e **+ Aggiungi elemento** in alto al centro.
    - I punti cliccati sul contorno di un elemento restano **agganciati**: se poi quell'elemento si
      allarga, si restringe o si spezza, la linea (o il lato del poligono) lo segue.
 
-   Elementi disponibili:
-   - *Marciapiede*, *Pista ciclabile* (in sede propria, in resina rossa; rialzabile nel 3D),
-     *Carreggiata*, *Corsia*, *Parcheggio*, *Aiuola / verde*;
+   Elementi disponibili (nell'elenco sono in ordine alfabetico):
+   - *Aiuola / verde*, *Carreggiata*, *Corsia*, *Marciapiede*, *Parcheggio*, *Pista ciclabile* (in sede propria,
+     in resina rossa; rialzabile nel 3D);
    - *Corsia ciclabile* (predefinita 1,50 m): ciclabile ricavata sulla carreggiata, a quota strada,
      in rosso con striscia bianca continua verso il traffico e simboli della bici;
    - *Striscia gialla* (predefinita 0,50 m): fascia gialla di separazione, per esempio tra corsia
      ciclabile e carreggiata o tra due corsie;
-   - *Corsia doppia* (predefinita 6,00 m): due corsie di marcia in un solo elemento, con la
-     striscia bianca tratteggiata (4,5 / 7,5 m) a metà larghezza.
+   - *Ciclopedonale* (predefinita 3,00 m): percorso per bici e pedoni, **misto** oppure **separato** (striscia
+     continua a metà: da una parte le bici, dall'altra i pedoni), da scegliere nella scheda *Opzioni*.
+
+   La *Corsia doppia* non c'è più: per due corsie usa una *Carreggiata* con una striscia di mezzeria. I progetti che
+   la usavano si aprono con una carreggiata al suo posto (stessa forma, mezzeria tratteggiata).
 
    I progetti fatti con le versioni precedenti (con i bordi strada) si aprono e si modificano come
    prima: i loro bordi restano sulla mappa e si possono usare come contorni da cui riempire.
 
 ## Modificare un elemento
 
-Clicca l'elemento sulla mappa o nell'elenco a sinistra. Nel riquadro *Elemento selezionato*, sotto al nome,
-ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affiancati, elimina), **Variatori (n)**
-(i variatori di sezione, con il loro numero) e **Info** (estensione, superficie e larghezze).
+Clicca l'elemento sulla mappa o nell'elenco a sinistra. Si apre il riquadro dell'elemento: il titolo dice come è
+disegnato (*Poligono*, oppure *Tracciato › Bordo*, *› Interasse*, *› Riempimento*); sotto al nome c'è la tendina del
+**tipo** (con il colore di ogni tipo), poi quattro schede: **Disegna** (larghezza, linea, elementi affiancati, elimina), **Opzioni** (le
+caratteristiche proprie del tipo: strisce di mezzeria per carreggiate e corsie, linee degli stalli per i
+parcheggi, altezza per marciapiedi e aiuole), **Variatori (n)** (i variatori di sezione, con il loro
+numero) e **Info** (estensione, superficie e larghezze).
 
-- **Tipo**: la tendina sotto al nome cambia il tipo dell'elemento (es. da marciapiede a pista
+- **Tipo**: la tendina subito sotto al nome cambia il tipo dell'elemento (es. da marciapiede a pista
   ciclabile): forma e larghezza restano, cambiano colore, layer DXF, materiali 3D e segnaletica. Se il
   nome era quello automatico («Marciapiede 2») diventa quello del nuovo tipo.
-- **Strisce di mezzeria** (carreggiata, corsia, corsia doppia, pista e corsia ciclabile): numero di
+- **Opzioni → Strisce di mezzeria** (carreggiata, corsia, pista e corsia ciclabile): numero di
   strisce e tipo (*tratteggiate*, *continue*, *doppie continue*). Le strisce dividono l'elemento in
   parti uguali (es. 3 strisce su 12 m = 4 corsie da 3 m) e seguono le variazioni di larghezza.
   *Automatico* torna alla regola predefinita (una mezzeria sulla carreggiata da 5,5 m in su, sulla
-  corsia doppia e sulla pista ciclabile bidirezionale da 2,5 m). Compaiono sulla mappa, nel 3D, nel
+  pista ciclabile bidirezionale da 2,5 m). Compaiono sulla mappa, nel 3D, nel
   fotoinserimento e nel DXF (layer `CD_SEGNALETICA`).
-- **Parcheggio**: la casella *Linee bianche degli stalli di sosta* (attiva in modo predefinito) mostra o
+- **Opzioni → Parcheggio**: la casella *Linee bianche degli stalli di sosta* (attiva in modo predefinito) mostra o
   nasconde le linee degli stalli e la linea lungo il lato verso la strada; *Lunghezza degli stalli* (5,00 m
   in modo predefinito) cambia la distanza tra le linee. Valgono sulla mappa, nel 3D, nel fotoinserimento
   e nel DXF (layer `CD_SEGNALETICA`) e si salvano nel progetto.
+- **Opzioni → Mista / Separata** (ciclopedonale): percorso misto, oppure separato da una striscia bianca
+  continua a metà (sulla mappa, nel 3D, nel fotoinserimento e nel DXF).
+- **Opzioni → Altezza** (marciapiede, aiuola e ciclopedonale): quota del piano sopra la strada, 0,15 m se non indicata.
+  Vale nel modello 3D, nel fotoinserimento e nel disegno delle sezioni.
 - **Larghezza**: pulsanti −0,5 / −0,1 / +0,1 / +0,5, il campo numerico, oppure i tasti + e −.
 - **Variatori di sezione** (elementi tracciati: carreggiata, ciclabile, corsia, marciapiede…): per far
   cambiare la larghezza in un tratto. *Aggiungi variatore di sezione*, poi clic sull'elemento dove inizia
@@ -141,24 +160,23 @@ ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affianca
   elimina. Per spostare l'inizio o la fine, trascina sulla mappa i pallini sul variatore (bianco = inizio,
   arancione = fine). Più variatori si sommano: per esempio un allargamento a metà via e poi un restringimento più
   avanti. Sulla mappa il tratto di passaggio è evidenziato in arancione. La fine può stare anche prima
-  dell'inizio: in quel caso il cambio vale verso l'inizio della linea. *Larghezza costante* toglie i
-  variatori.
+  dell'inizio: in quel caso il cambio vale verso l'inizio della linea.
 - **Spezzare il bordo esterno**: doppio clic sul bordo esterno (linea blu) in un punto. Compare un
   quadratino: trascinalo per cambiare la larghezza in quel punto (la larghezza varia linearmente tra
-  i punti). Ctrl+clic su un quadratino per toglierlo; *Larghezza costante* li toglie tutti.
-- **Ignora rientranze e sporgenze fino a (m)**: i gradini delle facciate più piccoli di questo valore
+  i punti). Ctrl+clic su un quadratino per toglierlo.
+- **Ignora irregolarità (m)**: i gradini delle facciate più piccoli di questo valore
   non vengono riportati sul bordo esterno, che resta regolare (predefinito 1,00 m sui bordi strada,
   0 sugli elementi). Il lato verso il muro segue sempre la facciata reale.
 - **Modifica la linea**: mostra i punti chiave della linea (quelli cliccati durante il disegno;
   i vertici aggiunti da *Segui il contorno* lungo i muri non sono punti chiave e si ricalcolano):
   - **trascina** un punto per spostarlo (si aggancia a muri ed elementi);
-  - **clic** su un punto e **Canc** (o *Elimina punto*) per toglierlo;
+  - **clic** su un punto e **Canc** per toglierlo;
   - **doppio clic** sulla linea per inserire un nuovo punto in quel tratto;
   - **Prosegui dall'inizio** / **Prosegui dalla fine**, poi clic sulla mappa per aggiungere punti da
     quel lato (le etichette «inizio» e «fine» indicano i due capi); Esc smette di aggiungere;
   - **Salva** (o Invio) per chiudere la modifica. I punti verdi sono agganciati a un altro elemento.
   Si usa dall'elemento selezionato e anche in «Aggiungi elemento», dopo aver disegnato la linea e prima
-  di premere «Disegna».
+  di premere «Prosegui».
 - **Aggiungi a sinistra / Aggiungi a destra** (in fondo al riquadro, per gli elementi tracciati):
   crea subito un nuovo elemento accanto a quello selezionato, lungo quanto lui, appoggiato al suo
   contorno da quel lato (dello stesso tipo, con la larghezza predefinita). Destra e sinistra sono
@@ -175,6 +193,25 @@ ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affianca
   superficie, e con *Modifica la linea* si spostano i vertici del contorno. Gli elementi agganciati al suo
   contorno restano dove sono ma non lo seguono più; se un elemento è riempito tra questo e un altro, la
   conversione non è possibile finché non lo elimini.
+- **Doppio clic su un elemento** già disegnato: lo seleziona ed entra subito in *Modifica la linea* (per un
+  tracciato) o *Modifica poligono* (per un poligono).
+- **Poligono**: il contorno è chiuso, quindi non ha inizio né fine (niente etichette «inizio»/«fine» né
+  pulsanti *Prosegui*).
+- **Punti curvi** (tracciati e poligoni): in modifica, **doppio clic su un punto** lo rende **curvo** (curva di Bézier): compaiono due
+  maniglie da trascinare per cambiare la curva (sono simmetriche); i punti curvi sono tondi, gli spigoli
+  quadrati. I lati del punto curvo non seguono più muri o elementi; gli altri lati restano come sono.
+  Un altro doppio clic sul punto lo riporta spigolo. Le curve restano quando sposti gli altri punti, si salvano nel progetto e valgono
+  per superficie, DXF, 3D e sezioni.
+- **Crea elementi da aree ed elementi**: **doppio clic** su una parte vuota della mappa per sceglierla: un'area
+  dove non c'è nessun elemento (il più piccolo poligono dei livelli visibili, esclusi gli edifici; altrimenti
+  lo spazio libero tra edifici ed elementi disegnati). Poi **Ctrl+clic** o Maiusc+clic su altre **aree della mappa**
+  (⌘+clic sul Mac); Maiusc/Ctrl+clic su un elemento disegnato invece lo sceglie per i *gruppi* per aggiungere altre parti, **anche lontane**; un altro
+  Ctrl+clic la toglie. Le aree scelte sono in verde, gli elementi scelti in blu, i contorni uniti in verde
+  scuro. In alto compare il pulsante verde **Crea elemento**: si sceglie solo il **tipo** dall'elenco. Le
+  parti che si toccano (fessure fino a 5 cm comprese) si uniscono e **ogni gruppo diventa un elemento
+  poligono** di quel tipo; gli elementi disegnati che facevano parte della scelta vengono sostituiti dai nuovi.
+  Un gruppo che racchiude un vuoto non si può creare (il pulsante resta spento e la barra in basso dice
+  perché). Un clic semplice o Esc annullano la scelta; Ctrl+Z annulla la creazione.
 - *Elimina elemento* (o tasto Canc): con l'elemento se ne va anche la sua linea. Un elemento usato
   per riempire tra due elementi non si elimina finché non elimini prima quello; le linee che lo
   seguivano restano dov'erano.
@@ -182,6 +219,46 @@ ci sono tre schede: **Dati** (tipo, larghezza, linea, strisce, elementi affianca
 Per ogni elemento il programma calcola **estensione** (lunghezza della linea disegnata),
 **superficie**, **larghezza minima, massima e media** (misurate tra il bordo interno reale e il
 bordo esterno, ogni 10 cm circa). In basso a destra ci sono i totali per tipo.
+
+## Gruppi
+
+Il riquadro **Gruppi** (a sinistra, sopra *Elementi*) serve a raggruppare elementi, per esempio un tratto di
+strada, e a tenerne **più versioni** nello stesso progetto, da accendere e spegnere.
+
+- **Maiusc+clic** (o Ctrl+clic) sugli **elementi disegnati** per sceglierne uno o più (un altro Maiusc+clic lo
+  toglie dalla scelta). In alto, al posto di *Aggiungi elemento* e *Crea elemento*, compaiono:
+  - **Crea gruppo**: un nuovo gruppo con gli elementi scelti (il nome si può scrivere subito);
+  - **Aggiungi a gruppo ▾**: l'elenco dei gruppi, ciascuno con il suo colore; gli elementi scelti vanno in quello.
+  Un clic semplice o Esc annullano la scelta.
+- Ogni scheda della colonna di sinistra (Gruppi, Foto ins., Sezioni, Elementi) ha un riquadro **Cerca…**
+  a sinistra di *+ Nuovo*: filtra l'elenco per nome (per gli elementi anche per tipo).
+- **+ Nuovo** crea un gruppo vuoto con un nome predefinito (*Gruppo 1*, *Gruppo 2*…); l'elemento selezionato, se
+  c'è, ci entra subito. Il nome si cambia scrivendo direttamente nella riga (Invio per confermare).
+- **Gruppi** (in alto sulla mappa, accanto ad *Aggiungi elemento*, con l'occhio aperto o chiuso): mostra o nasconde i
+  bordi colorati degli elementi dei gruppi; con l'occhio chiuso la mappa appare come se i gruppi non ci fossero.
+- Ogni gruppo riceve in automatico un **colore** diverso dagli altri (il pallino nella riga). Gli elementi del
+  gruppo hanno sulla mappa il **bordo di quel colore**.
+- **(+)** nella riga attiva la **modifica del gruppo**: clicca sulla mappa gli elementi da mettere nel gruppo (un
+  altro clic su un elemento lo toglie); i bordi del gruppo diventano più spessi. In alto, al posto di *Aggiungi
+  elemento*, c'è solo **Salva gruppo «nome»**: premilo (o Esc) per finire. Un elemento sta in un solo gruppo.
+- I pulsanti in alto sulla mappa cambiano con la modalità: normale → *Aggiungi elemento*; modifica di un gruppo →
+  *Salva gruppo*; elementi scelti con Maiusc/Ctrl+clic → *Crea gruppo* e *Aggiungi a gruppo*; aree della mappa
+  scelte → *Crea elemento*.
+- **Clic sulla riga** = gruppo corrente (evidenziato): i nuovi elementi disegnati entrano in quel gruppo. Un
+  secondo clic lo toglie.
+- **Occhio**: mostra o nasconde il gruppo. Gli elementi di un gruppo nascosto non si vedono sulla mappa, non
+  compaiono nell'elenco degli elementi, non si selezionano, non contano nei totali e nelle sezioni e non
+  vanno nelle esportazioni (DXF, CSV, 3D, fotoinserimento). Restano però nel progetto e si salvano: gli
+  elementi agganciati a loro continuano a funzionare.
+- **Nuova versione** (icona delle due pagine): copia tutti gli elementi del gruppo, con le loro linee, in un
+  nuovo gruppo (*Nome – versione 2*, con un altro colore), che diventa visibile e corrente; l'originale viene
+  nascosto. Nella copia gli agganci tra elementi dello stesso gruppo passano alle copie (es. la striscia gialla
+  segue la nuova carreggiata); quelli verso elementi fuori dal gruppo restano. Per confrontare le versioni
+  accendi l'occhio dell'una e spegni quello dell'altra.
+- **Cestino**: elimina il gruppo; i suoi elementi restano, senza gruppo.
+- Nel riquadro dell'elemento (scheda *Disegna*) la tendina **Gruppo** sposta l'elemento in un altro gruppo o lo
+  toglie da tutti (*Nessuno*).
+- Gruppi, nomi, colori e visibilità si salvano nel progetto e si possono annullare con Ctrl+Z.
 
 ## Sezioni stradali
 
@@ -203,6 +280,14 @@ Il riquadro **Sezioni** (a sinistra) raccoglie le sezioni del progetto.
   sopra a quelli più grandi e un clic seleziona quello più piccolo.
 - **Inverti verso**: guarda la sezione dall'altro lato della linea (le frecce sulla mappa si girano e nel
   disegno destra e sinistra si scambiano).
+- **Figure**: sopra ogni elemento il disegno mostra chi lo usa, visto di fronte e in scala: un **pedone** sul
+  marciapiede, un **ciclista** sulla pista e sulla corsia ciclabile, un'**auto** sulla carreggiata, sulle corsie e nei parcheggi, un **pedone e un ciclista** affiancati sul ciclopedonale. Sulle **aiuole** il verde dipende dalla larghezza:
+  fino a 40 cm una tappezzante, fino a 1,40 m un arbusto, oltre un albero.
+  Se l'elemento è diviso in corsie dalle strisce di mezzeria, c'è una figura per corsia (es. due ciclisti su una
+  ciclabile bidirezionale).
+- **Salva PNG**: salva la sezione come immagine su fondo bianco, con il nome, il disegno (figure e quote) e la
+  legenda con numero, nome, tipo e larghezza di ogni elemento, il totale e la distanza tra gli edifici.
+- Il riquadro della sezione si apre sopra i pulsanti in basso a destra (vista, penna, testo).
 - Il nome si cambia nella casella in alto; il cestino elimina la sezione; ✕ (o Esc) la chiude.
 - Le sezioni si salvano nel progetto.
 
@@ -211,9 +296,19 @@ Il riquadro **Sezioni** (a sinistra) raccoglie le sezioni del progetto.
 - **Esporta DXF…**: DXF ASCII R12 (apribile da AutoCAD, BricsCAD, DraftSight, LibreCAD, QGIS),
   unità **metri** (`$INSUNITS = 6`), coordinate nel sistema di riferimento del GeoPackage.
   Layer: `CD_INTERASSI` (le linee d'asse degli elementi disegnati dall'interasse), `CD_SEGNALETICA` (strisce di mezzeria), `CD_BORDI_STRADA` (progetti precedenti), `CD_MARCIAPIEDE`, `CD_PISTA_CICLABILE`, `CD_CARREGGIATA`, `CD_CORSIA`,
-  `CD_PARCHEGGIO`, `CD_AIUOLA`, `CD_CORSIA_CICLABILE`, `CD_SEPARATORE_GIALLO`, `CD_CORSIA_DOPPIA`, `CD_TESTI` (nome, lunghezza, superficie, larghezze) e, se richiesto,
+  `CD_PARCHEGGIO`, `CD_AIUOLA`, `CD_CORSIA_CICLABILE`, `CD_SEPARATORE_GIALLO`, `CD_TESTI` (nome, lunghezza, superficie, larghezze) e, se richiesto,
   il contesto `CTX_MURI`, `CTX_MARCIAPIEDI`, `CTX_<livello>`. Ogni elemento è una polilinea chiusa.
 - **Esporta 3D…**: vedi sotto. I fotoinserimenti si fanno dal riquadro *Fotoinserimenti* a sinistra.
+- **Esporta PDF…**: si apre una finestra con l'elenco dei **gruppi** (tutti, nessuno o solo alcuni, con il numero
+  di elementi; gli elementi che non stanno in nessun gruppo sono la voce *Senza gruppo*; senza gruppi c'è *Tutto il progetto*), le pagine da aggiungere e il formato (**A3** o **A4**, sempre
+  orizzontale). Planimetrie e sezioni sono disegnate a vettori: si ingrandiscono senza perdere definizione.
+  Per ogni gruppo scelto:
+  - una pagina con la **planimetria del solo gruppo** (sopra la cartografia di sfondo, con la rotazione della vista),
+    in una scala d'uso (1:200, 1:250, 1:500…), con scala grafica, nord e legenda dei tipi con le superfici;
+  - una pagina per ogni **sezione** che attraversa il gruppo, disegnata con i soli elementi del gruppo;
+  - una pagina per ogni **fotoinserimento** in cui il gruppo si vede davvero (non troppo lontano né nascosto dagli edifici);
+    sulla foto ci sono gli elementi del gruppo insieme a quelli senza gruppo, la base comune del progetto (foto senza auto
+    e deformazione comprese, se ci sono).
 - **Esporta CSV…**: misure di tutti gli elementi, apribile in Excel.
 - **Salva progetto…** (`.ciclo`): bordi, elementi e ruoli dei livelli; si riapre con *Apri progetto…*
   (il GeoPackage viene cercato nel percorso originale o nella cartella del progetto).
@@ -238,7 +333,7 @@ Twinmotion, Unreal, Unity, SketchUp, 3ds Max e nei visualizzatori web.
 - Senza *Materiali realistici* la scena usa colori uniformi (file più leggero).
 
 **Progetto**: corsia ciclabile in resina rossa con striscia bianca continua e simboli bici;
-striscia gialla di separazione in vernice gialla; corsia doppia con tratteggio centrale;
+striscia gialla di separazione in vernice gialla;
 marciapiedi e aiuole rialzati (predefinito 15 cm) con cordolo sul bordo esterno; pista
 ciclabile a quota strada (o rialzata) con striscia continua verso la carreggiata e mezzeria
 tratteggiata se larga almeno 2,5 m; carreggiata con mezzeria discontinua 4,5 / 7,5 m se larga almeno
@@ -338,15 +433,44 @@ Le basi cartografiche con tutte le classi in un solo livello (es. *base DBT per 
 colonna `codice_classe`) vengono divise in un livello per classe (`EDIFC · …`, `AC_PED · …`), così
 gli edifici fanno da muri e da maschera.
 
+## Disegni e note sulla mappa
+
+In basso a destra sulla mappa ci sono due strumenti:
+
+- **Penna** (matita): trascina sulla mappa per disegnare a mano libera, per esempio la linea lungo cui vuoi
+  una strada o una ciclabile.
+- **Testo** (T): clic sulla mappa per scrivere una nota (Invio per confermare, Maiusc+Invio per andare a capo,
+  Esc per annullare). Clic su una nota esistente per modificarla; svuotata, la nota sparisce.
+
+Con uno dei due attivo compare sopra un piccolo menu: **colore** (otto colori), **dimensione** (spessore del
+tratto o grandezza del testo) e la **gomma**: clic su un disegno o su un testo per cancellarlo. Esc o un nuovo
+clic sullo strumento lo spegne. Tratti e testi restano della stessa grandezza sullo schermo quando ingrandisci,
+si salvano nel progetto, si annullano con Ctrl+Z e si nascondono da *Visualizza → Disegni e note*. Non vanno
+nelle esportazioni.
+
+I disegni servono anche a parlare con un assistente AI: vedi *Server MCP* (strumenti `elenco_note` e
+`disegna_lungo_nota`).
+
 ## Comandi vista
 
 Rotella = zoom · trascina con tasto destro o centrale = sposta · in assenza di selezione anche il
-trascinamento col tasto sinistro sposta la vista · Esc = annulla · *Adatta vista* = tutto il disegno.
+trascinamento col tasto sinistro sposta la vista · Esc = annulla · *Adatta vista* = tutta la piantina (livelli visibili, elementi visibili e sezioni) al massimo
+ingrandimento possibile, anche con il disegno ruotato, senza finire sotto i pulsanti e i riquadri aperti sopra la mappa.
 
-**Rotazione**: accanto ad *Adatta vista* i pulsanti **⟲ +5°** (antiorario) e **⟳ −5°** (orario) ruotano
+**Rotazione**: in basso a destra sulla mappa, accanto ad *Adatta vista*, i pulsanti **⟲ +5°** (antiorario) e **⟳ −5°** (orario) ruotano
 il disegno sullo schermo, per esempio per avere la via in orizzontale. Quando il disegno è ruotato compare
 un terzo pulsante con l'angolo (es. «+30° · N ↑»): premilo per tornare con il nord in alto. La rotazione
 cambia solo la vista (coordinate, DXF, 3D ed esportazioni non cambiano) e si salva nel progetto.
+
+**Vista 3D**: il pulsante **3D** in basso a destra, accanto ad *Adatta vista*, mostra la mappa in tre dimensioni: edifici
+con le altezze dei dati, elementi del progetto rialzati con i cordoli, segnaletica, alberi e lampioni (gli stessi dell'esportazione 3D,
+senza texture). Si guarda e basta: per disegnare e modificare si torna al 2D (pulsante **2D**, oppure *Aggiungi elemento*).
+- **trascina** con il tasto sinistro per ruotare attorno al centro e inclinare la vista;
+- **trascina** con il tasto destro o centrale per spostarti; **rotella** per avvicinarti o allontanarti;
+- *Adatta vista* inquadra il progetto, **⟲ +5°** e **⟳ −5°** ruotano la vista.
+
+Mentre ti sposti e ruoti, **gli edifici che coprono gli elementi disegnati si nascondono da soli**: al loro posto resta
+l'impronta grigia a terra, e ricompaiono appena non coprono più il progetto. La scena si aggiorna da sola quando il progetto cambia.
 
 Durante lo zoom e lo spostamento lo sfondo (edifici, marciapiedi esistenti, livelli di sfondo, alberi)
 viene ingrandito come un'immagine già pronta, così la mappa resta fluida anche con molti edifici;
@@ -409,11 +533,26 @@ Modifica configurazione*):
 | `affianca_elemento` | nuovo elemento a destra o a sinistra, lungo come quello indicato |
 | `elimina_elemento` | elimina un elemento |
 | `salva_progetto` | salva il `.ciclo` (stesso file o un altro) |
+| `progetti_recenti` | i progetti aperti di recente nel programma (per trovare quello su cui lavori) |
+| `elenco_note` | i tratti disegnati con la penna e le note di testo: colore, punti, lunghezza, testo, elementi vicini |
+| `disegna_lungo_nota` | nuovo elemento usando un tratto come linea (bordo, interasse o poligono) |
+| `aggiungi_nota` / `elimina_nota` | scrive o toglie una nota sulla mappa |
 | `esporta_dxf` / `esporta_csv` / `esporta_3d` | esportazioni, come dal menu Esporta |
 
 Le coordinate sono in metri nel sistema di riferimento del GeoPackage. Le modifiche restano in memoria
-finché non si chiama `salva_progetto`; il server lavora sui file e non sulla finestra del programma
-eventualmente aperta (dopo il salvataggio, riapri il progetto nel programma per vederle).
+finché non si chiama `salva_progetto`; il server lavora sui file. Se il progetto è aperto nel programma,
+dopo il salvataggio il programma lo ricarica da solo.
+
+**Disegnare e chiedere all'assistente.** Il modo più comodo di lavorare insieme a un assistente:
+
+1. nel programma disegna con la **penna** la linea lungo cui vuoi l'intervento (es. in rosso lungo la via) e,
+   se vuoi, scrivi una nota con il **testo**; poi **salva** il progetto (Ctrl+S);
+2. nella chat scrivi cosa vuoi, per esempio: «nel mio progetto CicloDraft, lungo la linea rossa voglio una
+   ciclabile bidirezionale da 2,50 m con un'aiuola da 1 m verso la carreggiata»;
+3. l'assistente trova il progetto (`progetti_recenti`), legge i disegni (`elenco_note`), crea gli elementi
+   (`disegna_lungo_nota`, `affianca_elemento`, `modifica_elemento`…) e salva;
+4. il programma si accorge che il file è cambiato e **lo ricarica da solo**, mantenendo la vista (se avevi
+   modifiche non salvate chiede prima). Gli elementi nuovi compaiono sulla mappa e si modificano come gli altri.
 
 ## Annulla e ripeti
 
@@ -443,6 +582,7 @@ Public License, versione 3 o (a tua scelta) successiva. Il testo completo è nel
 | `Model/Project.cs` | bordi, elementi parametrici, rigenerazione, misure |
 | `Model/Editor.cs` | logica di interazione (tracciamento, aggancio, scelta tratto, modifica) |
 | `Controls/MapCanvas.cs` | vista planimetrica e mouse |
+| `Controls/View3D.cs` | vista 3D della mappa (edifici che si nascondono davanti al progetto) |
 | `IO/` | lettura GeoPackage, scrittura DXF/CSV, file di progetto |
 | `IO/SourceData.cs`, `IO/ShpReader.cs` | lettura di file grandi (indice spaziale del GeoPackage) e shapefile |
 | `IO/GpkgClipper.cs` | ritaglio e scrittura del GeoPackage ridotto |
@@ -451,3 +591,4 @@ Public License, versione 3 o (a tua scelta) successiva. Il testo completo è nel
 | `IO/PhotoMatch.cs`, `IO/PhotoRender.cs`, `PhotoWindow.axaml`, `Controls/PhotoCanvas.cs`, `Controls/PickMapCanvas.cs` | fotoinserimento: calcolo della fotocamera, disegno sulla foto, finestra |
 | `IO/CarRemoval.cs` | rimozione delle auto: rilevamento (YOLOX), sagome (SAM), appoggio a terra e confronto con il progetto, ricostruzione (LaMa) con ONNX Runtime |
 | `MainWindow.axaml` | interfaccia |
+| `MainWindowPdf.cs`, `ExportPdfWindow.axaml` | esportazione PDF (planimetrie dei gruppi, sezioni, fotoinserimenti) |

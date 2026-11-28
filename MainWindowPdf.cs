@@ -42,7 +42,7 @@ public partial class MainWindow
     }
 
     static IEnumerable<Element> GroupElements(Project p, int g) =>
-        p.Elements.Where(e => (g == 0 ? true : e.Group == g) && e.Error == null && e.Polygon.Count >= 3);
+        p.Elements.Where(e => (p.Groups.Count == 0 || e.Group == g) && e.Error == null && e.Polygon.Count >= 3);
 
     static bool SectionCrosses(CrossSection s, List<Element> els)
     {
@@ -72,7 +72,7 @@ public partial class MainWindow
     /// <summary>Il gruppo cade nell'inquadratura della foto (davanti alla fotocamera, entro 400 m).</summary>
     static bool PhotoSees(PhotoCamera cam, List<Element> els)
     {
-        bool In(V2 p) { var (u, v, d) = cam.Project(p.X, p.Y, 0); return d > 0.3 && d < 400 && u >= 0 && v >= 0 && u < cam.W && v < cam.H; }
+        bool In(V2 p) { var (u, v, d) = cam.Project(p.X, p.Y, 0); return d > 0.3 && d < 250 && u >= 0 && v >= 0 && u < cam.W && v < cam.H; }
         foreach (var e in els)
         {
             var ring = e.Polygon;
@@ -145,6 +145,25 @@ public partial class MainWindow
         return scale;
     }
 
+    /// <summary>Quanti pixel della foto mostrano il gruppo (tenendo conto di edifici e maschera): 0 = non si vede.</summary>
+    async Task<int> PhotoCoverage(PhotoInsertRef r, Project copy)
+    {
+        if (PhotoCam(r) is not { } cam) return 0;
+        var data = _ed.Data;
+        return await Task.Run(() =>
+        {
+            var photo = Rgba.Load(r.Path);
+            if (photo.W != cam.W || photo.H != cam.H) return 0;
+            var mp = Sidecar(r.Path, ".maschera.png");
+            Rgba? mask = File.Exists(mp) ? Rgba.Load(mp) : null;
+            if (mask != null && (mask.W != photo.W || mask.H != photo.H)) mask = null;
+            var res = PhotoRender.Render(cam, photo, mask, copy, data, new PhotoRenderOptions { Supersample = 1, Markings = false, StreetLights = false, BikeSymbols = false });
+            int n = 0;
+            for (int i = 3; i < res.Layer.Px.Length; i += 4) if (res.Layer.Px[i] > 100) n++;
+            return n;
+        });
+    }
+
     async Task<SKImage?> RenderPhoto(PhotoInsertRef r, Project copy)
     {
         if (PhotoCam(r) is not { } cam) return null;
@@ -181,13 +200,20 @@ public partial class MainWindow
         var groupEls = new Dictionary<int, List<Element>>();
         foreach (var g in o.Groups)
         {
-            copy.OnlyGroup = g == 0 ? null : g;
+            copy.OnlyGroup = copy.Groups.Count == 0 ? null : g;
             var els = GroupElements(copy, g).ToList();
             if (els.Count == 0) continue;
             groupEls[g] = els;
             pages.Add(new PdfPage("plan", g, null, null));
             if (o.Sections) foreach (var s in copy.Sections.Where(s => SectionCrosses(s, els))) pages.Add(new PdfPage("section", g, s, null));
-            if (o.Photos) foreach (var r in copy.Photos.Where(r => PhotoCam(r) is { } c && PhotoSees(c, els))) pages.Add(new PdfPage("photo", g, null, r));
+            if (o.Photos)
+                foreach (var r in copy.Photos.Where(r => PhotoCam(r) is { } c && PhotoSees(c, els)))
+                {
+                    // il gruppo deve vedersi davvero sulla foto (non lontano o tutto dietro agli edifici)
+                    progress?.Invoke($"Controllo del fotoinserimento «{r.Name}»…");
+                    var cam = PhotoCam(r)!;
+                    if (await PhotoCoverage(r, copy) >= Math.Max(300, cam.W * cam.H / 1000)) pages.Add(new PdfPage("photo", g, null, r));
+                }
         }
         copy.OnlyGroup = null;
         if (pages.Count == 0) throw new InvalidOperationException("Nei gruppi scelti non ci sono elementi da stampare.");
@@ -206,8 +232,8 @@ public partial class MainWindow
             progress?.Invoke($"Pagina {pn} di {pages.Count}…");
             await Task.Delay(1);
             var grp = copy.Groups.FirstOrDefault(x => x.Id == pg.Group);
-            string gName = grp?.Name ?? "Progetto";
-            copy.OnlyGroup = pg.Group == 0 ? null : pg.Group;
+            string gName = grp?.Name ?? (copy.Groups.Count > 0 ? "Senza gruppo" : "Progetto");
+            copy.OnlyGroup = copy.Groups.Count == 0 ? null : pg.Group;
             var els = groupEls[pg.Group];
             var cv = doc.BeginPage(W, H);
             cv.Clear(SKColors.White);
@@ -256,7 +282,13 @@ public partial class MainWindow
                     float iw = (float)ss.Width * k, ih = (float)ss.Height * k;
                     await DrawVector(cv, sp, ss, SKRect.Create(area.MidX - iw / 2, area.Top + (area.Height - ih) / 2, iw, ih), W, H);
                 }
-                else img = await RenderPhoto(pg.Photo!, copy);
+                else
+                {
+                    // sulla foto: il gruppo con gli elementi senza gruppo (la base comune del progetto)
+                    copy.OnlyGroupWithBase = true;
+                    try { img = await RenderPhoto(pg.Photo!, copy); }
+                    finally { copy.OnlyGroupWithBase = false; }
+                }
                 if (img != null)
                 {
                     float k = Math.Min(area.Width / img.Width, area.Height / img.Height);

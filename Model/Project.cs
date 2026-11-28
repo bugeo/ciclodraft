@@ -349,7 +349,9 @@ public class Project
     /// progetto (gli altri possono appoggiarsi a loro) ma non si vedono, non si selezionano e non vanno nelle esportazioni.</summary>
     /// <summary>Solo per le esportazioni (PDF): si vede soltanto questo gruppo (0 = solo gli elementi senza gruppo).</summary>
     public int? OnlyGroup;
-    public bool IsShown(Element e) => OnlyGroup is { } og ? e.Group == og : e.Group == 0 || Groups.FirstOrDefault(g => g.Id == e.Group) is not { Visible: false };
+    /// <summary>Con OnlyGroup: si vedono anche gli elementi senza gruppo (la base comune, per i fotoinserimenti).</summary>
+    public bool OnlyGroupWithBase;
+    public bool IsShown(Element e) => OnlyGroup is { } og ? e.Group == og || OnlyGroupWithBase && e.Group == 0 : e.Group == 0 || Groups.FirstOrDefault(g => g.Id == e.Group) is not { Visible: false };
     public IEnumerable<Element> Shown => Elements.Where(IsShown);
     /// <summary>La linea è visibile (non appartiene a un elemento nascosto).</summary>
     public bool IsShown(RoadEdge ed) => ed.Owner < 0 || Find(ed.Owner) is not { } o || IsShown(o);

@@ -354,6 +354,29 @@ public static class Export3D
 
     // ───────────── scena ─────────────
 
+    /// <summary>Un edificio per volta (per la vista 3D, che nasconde quelli davanti al progetto): impronta, altezza, geometria.</summary>
+    public static List<(V2[] Ring, double H, Node Node)> BuildingNodes(GpkgData data, Export3DOptions o)
+    {
+        var res = new List<(V2[], double, Node)>();
+        var vol = data.Layers.Where(l => (LayerRole)l.Role == LayerRole.Edifici3D).ToList();
+        var src = vol.Count > 0 ? vol : data.Layers.Where(l => (LayerRole)l.Role == LayerRole.Muri).ToList();
+        foreach (var l in src)
+            foreach (var lp in l.Polys)
+            {
+                double h = lp.Height is > 0.5 and < 400 ? lp.Height : o.DefaultBuildingHeight;
+                foreach (var p in Polys(Valid(lp.Poly)))
+                {
+                    if (p.Area < 0.5 || 2 * p.Area / p.Length < 0.4) continue;
+                    var n = new Node { Name = "Edificio" };
+                    Building(n, p, h, o.Textures);
+                    var ring = p.ExteriorRing.Coordinates.Take(p.ExteriorRing.NumPoints - 1).Select(c => new V2(c.X, c.Y)).ToArray();
+                    res.Add((ring, h, n));
+                }
+            }
+        return res;
+    }
+
+
     public static Node BuildScene(Project project, GpkgData? data, Export3DOptions o, out int nElements, out int nBuildings, out int nTrees)
     {
         var root = new Node { Name = "CicloDraft" };

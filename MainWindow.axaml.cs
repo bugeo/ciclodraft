@@ -58,6 +58,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Map.Editor = _ed;
+        Map3D.Editor = _ed;
         _ed.StructureChanged += UpdatePanels;
         Map.PointerWorldMoved += w =>
         {
@@ -196,8 +197,9 @@ public partial class MainWindow : Window
             if (_ed.Data == null) { Fail("Apri prima un GeoPackage."); return; }
             new ExportPdfWindow(this, _ed.Project, _projectPath != null ? Path.GetFileNameWithoutExtension(_projectPath) : BaseName).ShowDialog(this);
         };
-        ZoomBtn.Click += (_, _) => FitView();
-        RotPlusBtn.Click += (_, _) => Map.Rotate(5);
+        ZoomBtn.Click += (_, _) => { if (Map3D.IsVisible) Map3D.Fit(); else FitView(); };
+        View3DBtn.Click += (_, _) => Toggle3D();
+        RotPlusBtn.Click += (_, _) => { if (Map3D.IsVisible) Map3D.RotateBy(-5); else Map.Rotate(5); };
         AddVarBtn.Click += (_, _) => { _ed.StartVariator(); Map.Focus(); };
         TabDatiBtn.Click += (_, _) => SetSelTab(0);
         TabOptBtn.Click += (_, _) => SetSelTab(1);
@@ -208,7 +210,7 @@ public partial class MainWindow : Window
         PhotoIconsMenu.Click += (_, _) => Map.ShowPhotoIcons = PhotoIconsMenu.IsChecked;
         NotesMenu.Click += (_, _) => { Map.ShowNotes = NotesMenu.IsChecked; if (!NotesMenu.IsChecked) SetNoteTool(MapCanvas.NoteTool.None); };
         SetupNoteTools();
-        RotMinusBtn.Click += (_, _) => Map.Rotate(-5);
+        RotMinusBtn.Click += (_, _) => { if (Map3D.IsVisible) Map3D.RotateBy(5); else Map.Rotate(-5); };
         RotResetBtn.Click += (_, _) => Map.Rotate(-Map.Rotation);
         Map.ViewChanged += UpdateRotationLabel;
 
@@ -507,6 +509,8 @@ public partial class MainWindow : Window
             NewElemListBtn.Classes.Set("primary", noElems);
             NewElemListBtn.IsEnabled = hasData && _layersConfirmed && _ed.Mode == Mode.Idle;
             ViewBtns.IsVisible = hasData;
+            if (!hasData && Map3D.IsVisible) Toggle3D();
+            TopBtns.IsVisible = !Map3D.IsVisible;
             UpdateRotationLabel();
             LayersCard.IsVisible = hasData;
             SetActive(LayersCard, hasData && !_layersConfirmed);
@@ -654,9 +658,9 @@ public partial class MainWindow : Window
             SelPanel.IsVisible = s != null && !editingLine;
             // i riquadri di destra galleggiano sulla mappa e compaiono solo quando servono
             RightHintCard.IsVisible = false;
-            RightPanel.IsVisible = AddCard.IsVisible || SelPanel.IsVisible || EditLineCard.IsVisible;
+            RightPanel.IsVisible = (AddCard.IsVisible || SelPanel.IsVisible || EditLineCard.IsVisible) && !Map3D.IsVisible;
             NoteTools.IsVisible = hasData;
-            PenBtn.IsVisible = TextBtn.IsVisible = hasData && _layersConfirmed;
+            PenBtn.IsVisible = TextBtn.IsVisible = hasData && _layersConfirmed && !Map3D.IsVisible;
             // i pulsanti in basso a destra restano fermi: il riquadro di destra si ferma sopra di loro
             NoteTools.Margin = new Avalonia.Thickness(0, 0, 14, 14);   // il riquadro della sezione si apre sopra di loro
             RightHintText.Text = !hasData ? "Apri un progetto o un GeoPackage per iniziare."
@@ -1062,11 +1066,34 @@ public partial class MainWindow : Window
     void Ok(string m) { _ed.Message = m; _ed.NotifyAll(); }
     void Fail(string m) { _ed.Message = m; _ed.NotifyAll(); }
 
+    /// <summary>Passa dalla mappa 2D alla vista 3D (solo da guardare) e viceversa.</summary>
+    public void Toggle3D()
+    {
+        bool on = !Map3D.IsVisible;
+        if (on)
+        {
+            if (_ed.Data == null || _ed.Mode != Mode.Idle) return;
+            SetNoteTool(MapCanvas.NoteTool.None);
+            _ed.Selected = null; _ed.SelectedSection = null; _ed.ClearPick();
+            _addOpen = false;
+            var (cx, cy, sc) = Map.View;
+            Map3D.StartFrom(cx, cy, _ed.Project.ViewRotation, Map.Bounds.Width / Math.Max(1e-6, sc));
+        }
+        Map3D.IsVisible = on;
+        Map.IsHitTestVisible = !on;
+        View3DBtn.Content = on ? "2D" : "3D";
+        ToolTip.SetTip(View3DBtn, on ? "Torna alla mappa 2D" : "Vista 3D della mappa");
+        View3DBtn.Classes.Set("accent", on);
+        _ed.Message = on ? "Vista 3D: trascina per ruotare, tasto destro per spostare, rotella per avvicinare. Gli edifici davanti al progetto si nascondono da soli." : "";
+        _ed.NotifyAll();
+        if (on) Map3D.Focus(); else Map.Focus();
+    }
+
     /// <summary>Accanto ai pulsanti di rotazione: l'angolo attuale (clic = nord in alto), solo se il disegno è ruotato.</summary>
     void UpdateRotationLabel()
     {
         double r = Map.Rotation;
-        RotResetBtn.IsVisible = Math.Abs(r) > 1e-9;
+        RotResetBtn.IsVisible = Math.Abs(r) > 1e-9 && !Map3D.IsVisible;
         RotResetBtn.Content = $"{(r > 0 ? "+" : "")}{r.ToString("0.#", It)}°  ·  N ↑";
     }
 
@@ -1480,6 +1507,7 @@ public partial class MainWindow : Window
 
     void OpenAddCard()
     {
+        if (Map3D.IsVisible) Toggle3D();
         _kind = 0; _sub = 0; ResetTypeStep();
         _addOpen = true; _lastElemCount = _ed.Project.Elements.Count; _ed.Select(null); UpdatePanels();
     }
@@ -1728,7 +1756,7 @@ public partial class MainWindow : Window
         root.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(sec.Name) ? "Sezione" : sec.Name, FontSize = 24, FontWeight = FontWeight.Bold, Foreground = ink });
         root.Children.Add(new SectionView { Light = true, TextScale = 1.7, Result = r, Section = sec, Height = 560, Width = W });
         // legenda: numero, colore, nome, tipo, larghezza; poi la somma
-        var legend = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 12, RowSpacing = 6 };
+        var legend = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto"), ColumnSpacing = 12, RowSpacing = 6, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, MinWidth = 420 };
         int row = 0, n = 0;
         void Add(Control c, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); legend.Children.Add(c); }
         foreach (var x in r.Pieces)

@@ -21,6 +21,8 @@ public partial class ExportPdfWindow : Window
         else
             foreach (var g in p.Groups)
                 AddRow(g.Id, g.Name, g.Color, p.Elements.Count(e => e.Group == g.Id && e.Polygon.Count >= 3), g.Visible);
+        int loose = p.Groups.Count > 0 ? p.Elements.Count(e => e.Group == 0 && e.Polygon.Count >= 3) : 0;
+        if (loose > 0) AddRow(0, "Senza gruppo", null, loose, true);
         AllBtn.Click += (_, _) => { foreach (var b in _boxes) if (b.box.IsEnabled) b.box.IsChecked = true; };
         NoneBtn.Click += (_, _) => { foreach (var b in _boxes) b.box.IsChecked = false; };
         AllBtn.IsVisible = NoneBtn.IsVisible = _boxes.Count > 1;
